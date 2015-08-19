@@ -11,7 +11,7 @@ How to use:
 ===========
 
 Usage: SQLiteDBParser.py
-Parse deleted records from an SQLite file 
+Parse deleted records from an SQLite file
             Examples:
             -f /home/forensics/sms.db
             -d debug
@@ -28,15 +28,14 @@ Parse deleted records from an SQLite file
 
 
 Options:
-  --version             show program's version number and exit
-  -h, --help            show this help message and exit
-  -f sms.db, --file=sms.db
-                        sqlite database file
-  -d, --debug           Optional
-  -l, --tables          Optional
-  -s, --schema          Optional
-  -i, --info            Optional
-  -a, --all             Optional
+  --version                 show program's version number and exit
+  -h, --help                show this help message and exit
+  -f sms.db, --file=sms.db  sqlite database file
+  -d, --debug               Optional
+  -l, --tables              Optional
+  -s, --schema              Optional
+  -i, --info                Optional
+  -a, --all                 Optional
 
   Print table:
     Print dedicated table. Lookup a table name or number with option -l
