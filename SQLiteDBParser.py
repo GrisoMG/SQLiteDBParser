@@ -21,7 +21,7 @@
 # Requires:    Python 3
 #
 # Created:     19/08/2015
-# Licence:     GPL v3.0
+# License:     GPL v2.0
 #-------------------------------------------------------------------------------
 
 __author__ = 'grisomg'
