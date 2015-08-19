@@ -11,33 +11,7 @@ How to use:
 ===========
 
 Usage: SQLiteDBParser.py  
-<<<<<<< HEAD
-    Examples:
 
-        -f  /home/forensics/sms.db
-        -d  debug
-        -l  list all tables
-        -s  print schema
-        -i  print db info
-        -a  print all
-        -p  print table
-            -N  tablename or
-            -n  table number
-        -F  print freespace
-        -U  print unallocated
-        -D  print deleted pages
-
-    Options:
-      
-    --version                show program's version number and exit
-    -h, --help               show this help message and exit
-    -f sms.db, --file=sms.db sqlite database file
-    -d, --debug              Optional
-    -l, --tables             Optional
-    -s, --schema             Optional
-    -i, --info               Optional
-    -a, --all                Optional
-=======
     Examples:  
             -f /home/forensics/sms.db  
             -d debug    
@@ -55,15 +29,15 @@ Usage: SQLiteDBParser.py
 
    Options: 
       
---version                show program's version number and exit  
--h, --help               show this help message and exit  
--f sms.db, --file=sms.db sqlite database file  
--d, --debug              Optional   
--l, --tables             Optional  
--s, --schema             Optional  
--i, --info               Optional  
--a, --all                Optional  
->>>>>>> origin/master
+    --version                show program's version number and exit
+    -h, --help               show this help message and exit
+    -f sms.db, --file=sms.db sqlite database file
+    -d, --debug              Optional
+    -l, --tables             Optional
+    -s, --schema             Optional
+    -i, --info               Optional
+    -a, --all                Optional
+
 
   Print table:  
     Print dedicated table. Lookup a table name or number with option -l  
