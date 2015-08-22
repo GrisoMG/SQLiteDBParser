@@ -729,14 +729,14 @@ class SQLiteDBParser:
                         rowdata = "DC;"
                         rowdata += ";".join(map(str,row))
                         print(rowdata)
-                if fspace and self.hasFreespace(self.dbPages[leafpage]) == True:
+                if fspace and self.hasFreespace(self.dbPages[deletedpage]) == True:
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if verbose == True:
                             print("DF;" + freespace)
                         else:
                             print("DF;" + self._remove_non_printable(freespace))
 
-                if unallocated and self.hasUnallocated(self.dbPages[leafpage]) == True:
+                if unallocated and self.hasUnallocated(self.dbPages[deletedpage]) == True:
                     if verbose == True:
                         print("DU;" + self.dbPages[deletedpage]["unallocated"])
                     else:
