@@ -765,7 +765,7 @@ class SQLiteDBParser:
             print("Page number: %s\tTable name: %s\t Cols: %s" %(str(pageNr), str(tbl_name), str(col_count)))
 
     '''
-    Funtions borrowed by SQLiteZer
+    Funtions borrowed from SQLiteZer
     https://github.com/NotionalLabs/SQLiteZer
 
     Copyright [2013] [Jim Hung]
