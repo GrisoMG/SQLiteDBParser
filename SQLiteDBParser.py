@@ -80,7 +80,7 @@ class SQLiteDBParser:
         self.dbPages = []
         self.lPagesWithoutRoot = []
 
-        # 1. read db file, parse header, check if valid sqlite database, parse schema, get b-tree page offsets
+        # 1. read db file, parse header, check if valid sqlite database, parse schema, get page offsets
         self._readDBFile()
         self._parseDBHeader()
         if self.isSqliteDB() == False:
@@ -89,7 +89,7 @@ class SQLiteDBParser:
         self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
         self._getPageOffsets()
 
-        # 2. read all b-tree pages
+        # 2. read all pages
         self._readallDBPages()
         self._setSchemaForRootPages()
 
@@ -492,8 +492,6 @@ class SQLiteDBParser:
         return ''.join([ch for ch in chunk if ord(ch) > 31 and ord(ch) < 126 or ord(ch) ==9])
 
     def _remove_non_printable(self, chunk):
-        #import string
-        #return filter(lambda x: x in string.printable, chunk)
         ret = ""
         for ch in chunk:
             if ch > 31 and ch < 126 or ch == 9:
@@ -606,8 +604,6 @@ class SQLiteDBParser:
                 for leafpage in self.dbPages[ipage]["leafpages"]:
                     if self.hasCelldata(self.dbPages[leafpage]) == True:
                         for row in self.dbPages[leafpage]["celldata"]:
-                            #row = [str(cell).replace(';',',') for cell in row]
-                            #row = [str(cell).replace('\\n',',') for cell in row]
                             rowdata = "C;"
                             rowdata += ";".join(map(str,row))
                             print(rowdata)
@@ -662,7 +658,6 @@ class SQLiteDBParser:
 
         if page is None:
             return
-    ######
         if self.isRootPage(page) == True:
             try:
                 tblname, colheader = page["schema"].popitem()
@@ -677,14 +672,11 @@ class SQLiteDBParser:
         if (page["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
             if self.hasCelldata(page) == True:
                 for row in page["celldata"]:
-                    #row = [str(cell).replace(';',',') for cell in row]
-                    #row = [str(cell).replace('\\n',',') for cell in row]
                     rowdata = "C;"
                     rowdata += ";".join(map(str,row))
                     print(rowdata)
             if fspace:
                 for freespace in page["freespace"]:
-                    #print(self.dbPages[ipage]["freespace"])
                     if verbose == True:
                         print("F;" + freespace)
                     else:
@@ -701,8 +693,6 @@ class SQLiteDBParser:
             for leafpage in page["leafpages"]:
                 if self.hasCelldata(self.dbPages[leafpage]) == True:
                     for row in self.dbPages[leafpage]["celldata"]:
-                        #row = [str(cell).replace(';',',') for cell in row]
-                        #row = [str(cell).replace('\\n',',') for cell in row]
                         rowdata = "C;"
                         rowdata += ";".join(map(str,row))
                         print(rowdata)
@@ -724,8 +714,6 @@ class SQLiteDBParser:
             for deletedpage in page["deletedpages"]:
                 if self.hasCelldata(self.dbPages[deletedpage]) == True:
                     for row in self.dbPages[deletedpage]["celldata"]:
-                    #row = [str(cell).replace(';',',') for cell in row]
-                    #row = [str(cell).replace('\\n',',') for cell in row]
                         rowdata = "DC;"
                         rowdata += ";".join(map(str,row))
                         print(rowdata)
