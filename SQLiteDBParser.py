@@ -672,65 +672,68 @@ class SQLiteDBParser:
         if (page["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
             if self.hasCelldata(page) == True:
                 for row in page["celldata"]:
-                    rowdata = str(page["pageNr"]) + ";C;"
-                    rowdata += ";".join(map(str,row))
+                    rowdata = str(page["pageNr"]) + ";C;'"
+                    rowdata += "';'".join(map(str,row))
+                    rowdata += "'"
                     print(rowdata)
             if fspace:
                 for freespace in page["freespace"]:
                     if verbose == True:
-                        print(str(page["pageNr"]) + ";F;" + freespace)
+                        print(str(page["pageNr"]) + ";F;'';" + freespace)
                     else:
-                        print(str(page["pageNr"]) + ";F;" + self._remove_non_printable(freespace))
+                        print(str(page["pageNr"]) + ";F;'';" + self._remove_non_printable(freespace))
             if unallocated:
                 if verbose == True:
-                    print(str(page["pageNr"]) + ";U;" + page["unallocated"])
+                    print(str(page["pageNr"]) + ";U;'';" + page["unallocated"])
                 else:
                     data = self._remove_non_printable(page["unallocated"])
                     if data != "":
-                        print(str(page["pageNr"]) + ";U;" + data)
+                        print(str(page["pageNr"]) + ";U;'';" + data)
 
         if self.hasLeafPages(page) == True:
             for leafpage in page["leafpages"]:
                 if self.hasCelldata(self.dbPages[leafpage]) == True:
                     for row in self.dbPages[leafpage]["celldata"]:
-                        rowdata = str(leafpage) + ";C;"
-                        rowdata += ";".join(map(str,row))
+                        rowdata = str(leafpage) + ";C;'"
+                        rowdata += "';'".join(map(str,row))
+                        rowdata += "'"
                         print(rowdata)
                 if fspace and self.hasFreespace(self.dbPages[leafpage]) == True:
                     for freespace in self.dbPages[leafpage]["freespace"]:
                         if verbose == True:
-                            print(str(leafpage) + ";F;" + str(freespace))
+                            print(str(leafpage) + ";F;'';" + str(freespace))
                         else:
-                            print(str(leafpage) + ";F;" + self._remove_non_printable(freespace))
+                            print(str(leafpage) + ";F;'';" + self._remove_non_printable(freespace))
                 if unallocated and self.hasUnallocated(self.dbPages[leafpage]) == True:
                     if verbose == True:
-                        print(str(leafpage) + ";U;" + self.dbPages[leafpage]["unallocated"])
+                        print(str(leafpage) + ";U;'';" + self.dbPages[leafpage]["unallocated"])
                     else:
                         data = self._remove_non_printable(self.dbPages[leafpage]["unallocated"])
                         if data != "":
-                            print(str(leafpage) + ";U:" + data)
+                            print(str(leafpage) + ";U;'';" + data)
 
         if deleted and self.hasDeleted(page) == True:
             for deletedpage in page["deletedpages"]:
                 if self.hasCelldata(self.dbPages[deletedpage]) == True:
                     for row in self.dbPages[deletedpage]["celldata"]:
-                        rowdata = str(deletedpage) + ";DC;"
-                        rowdata += ";".join(map(str,row))
+                        rowdata = str(deletedpage) + ";DC;'"
+                        rowdata += "';'".join(map(str,row))
+                        rowdata += "'"
                         print(rowdata)
                 if fspace and self.hasFreespace(self.dbPages[deletedpage]) == True:
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if verbose == True:
-                            print(str(deletedpage) + ";DF;" + freespace)
+                            print(str(deletedpage) + ";DF;'';" + freespace)
                         else:
-                            print(str(deletedpage) + ";DF;" + self._remove_non_printable(freespace))
+                            print(str(deletedpage) + ";DF;'';" + self._remove_non_printable(freespace))
 
                 if unallocated and self.hasUnallocated(self.dbPages[deletedpage]) == True:
                     if verbose == True:
-                        print(str(deletedpage) + ";DU;" + self.dbPages[deletedpage]["unallocated"])
+                        print(str(deletedpage) + ";DU;'';" + self.dbPages[deletedpage]["unallocated"])
                     else:
                         data = self._remove_non_printable(self.dbPages[deletedpage]["unallocated"])
                         if data != "":
-                            print(str(deletedpage) + ";DU;" + data)
+                            print(str(deletedpage) + ";DU;'';" + data)
 
     def _lookUpTable(self, tbl_name):
 
