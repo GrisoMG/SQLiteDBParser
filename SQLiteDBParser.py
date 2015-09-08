@@ -330,11 +330,23 @@ class SQLiteDBParser:
     def _readPageFreeSpace(self, dbpage):
         fbOffset = dbpage["pageHeader"]["fbOffset"]
         freeblocklist = list()
-        while fbOffset != 0:
-            start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
-            freeblock = dbpage["page"][fbOffset: fbOffset + size]
-            freeblocklist.append(freeblock)
-            fbOffset = start
+        while fbOffset > 0:
+            try:
+                start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
+                if size > 0:
+                    freeblock = dbpage["page"][fbOffset: fbOffset + size]
+                else:
+                    freeblock = ''
+                freeblocklist.append(freeblock)
+                if (fbOffset != start) and (start > 0):
+                    fbOffset = start
+                else:
+                    fbOffset = 0
+                '''
+                fbOffset = start
+                '''
+            except:
+                fbOffset = 0
         return freeblocklist
 
     def _readPageUnallocated(self, dbpage):
@@ -370,7 +382,7 @@ class SQLiteDBParser:
         offset = 0
         ptrmapdict = dict()
         counter = 0
-        while offset < self.dbHeaderDict["pageSize"]:
+        while offset < (self.dbHeaderDict["pageSize"]- ptrMapLen):
             hdr = unpack(self._ptrmapfrmt, page[offset:offset+ptrMapLen])
             if hdr[0] == 0 and hdr[1] == 0:
                 break                       #no more pointers will follow
