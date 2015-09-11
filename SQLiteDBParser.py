@@ -145,6 +145,12 @@ class SQLiteDBParser:
         except:
             return False
 
+    def hasPtrMap(self):
+        ret = False
+        if self.ptrMap.__len__() > 0:
+            ret = True
+        return ret
+
     def _lPagesWithoutRoot(self):
         for page in self.dbPages:
             schemalist = list()
@@ -547,10 +553,16 @@ class SQLiteDBParser:
 
         print("sqlite_version_number: %s => %s" %(str(self.dbHeaderDict["sqlite_version_number"]),str(self.dbHeaderDict["sqlite_version_number"]).replace("00","0").replace("0",".")))
 
+    def printPtrMap(self):
 
         if self.ptrMap.__len__() > 0:
             print("Database has a pointer map...")
-            print(self.ptrMap)
+            pos = 0
+            for ptrmap in self.ptrMap:
+                idx = ptrmap['pageNr']
+                rp = ptrmap['pageType']
+                print("idx: %s\tpage: %s\troot page: %s" %(str(pos),str(pos+3),str(rp)))
+                pos += 1
 
     def printDBSchema(self):
         print("Parsed database schema...")
@@ -1015,6 +1027,8 @@ def main(argv):
 
     if options.printall:
         sqliteDB.printDBheader()
+        if sqliteDB.hasPtrMap() == True:
+            sqliteDB.printPtrMap()
         sqliteDB.printDBSchema()
         sqliteDB.printDBData()
     if options.printinfo:
