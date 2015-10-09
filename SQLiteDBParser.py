@@ -1026,6 +1026,12 @@ def main(argv):
 
     (options,args)=parser.parse_args()
 
+    if checkPythonVersion() != 3:
+        print("SQLiteDBParser requires python version 3...")
+        sys.exit(0)
+    else:
+        print("Python version ok...")
+
     #if input file missing, exit
     if (options.infile == None):
         parser.print_help()
