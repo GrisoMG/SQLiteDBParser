@@ -970,6 +970,13 @@ class SQLiteDBParser:
     '''
     End of SQLiteZer functions
     '''
+
+def checkPythonVersion():
+#    print(__import__("sys").version)
+    PYTHONVERSION, = __import__("sys").version_info[:1]
+
+    return PYTHONVERSION
+
 #######################################################################################
 #
 # Main
