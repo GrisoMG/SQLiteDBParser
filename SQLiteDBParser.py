@@ -701,13 +701,14 @@ class SQLiteDBParser:
         for dbtable in self.dbSchema:
             tbl_name = self.dbSchema[dbtable]['name']
             pageNr = self.dbSchema[dbtable]['rootpage']
+            pageType = self.dbPages[pageNr]['pageType']
             col_count = 0
             try:
                 col_count = self.dbSchema[dbtable]['schema'].__len__()
             except:
                 pass
 
-            print("Page number: %s\tTable name: %s\t Cols: %s" %(str(pageNr), str(tbl_name), str(col_count)))
+            print("Page number: %5s Table name: %20s Page Type: %23s Cols: %5s" %(str(pageNr), str(tbl_name), str(pageType), str(col_count)))
 
     '''
     Funtions borrowed from SQLiteZer
