@@ -900,6 +900,13 @@ class SQLiteDBParser:
     '''
     End of SQLiteZer functions
     '''
+
+def checkPythonVersion():
+#    print(__import__("sys").version)
+    PYTHONVERSION, = __import__("sys").version_info[:1]
+
+    return PYTHONVERSION
+
 #######################################################################################
 #
 # Main
@@ -948,6 +955,12 @@ def main(argv):
 
 
     (options,args)=parser.parse_args()
+
+    if checkPythonVersion() != 3:
+        print("SQLiteDBParser requires python version 3...")
+        sys.exit(0)
+    else:
+        print("Python version ok...")
 
     #if input file missing, exit
     if (options.infile == None):
