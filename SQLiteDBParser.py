@@ -45,6 +45,17 @@ INTERIOR_TABLE_BTREE_PAGE = 5
 LEAF_INDEX_BTREE_PAGE = 10
 LEAF_TABLE_BTREE_PAGE = 13
 
+INTERIOR_OFFSET = 12
+LEAF_OFFSET = 8
+
+
+class CellContent:
+    LEFT_CHILD_PAGE_NUM = "left child page num"
+    PAYLOAD_SIZE = "payload size"
+    RID = "rid"
+    PAYLOAD = "payload"
+    OVERFLOW_PAGE_HEAD = "overflow page head"
+
 #######################################################################################
 #
 # class SQLiteDBParser
@@ -86,11 +97,12 @@ class SQLiteDBParser:
         if self.isSqliteDB() == False:
             return None
 
-        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
+#        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
         self._getPageOffsets()
 
         # 2. read all pages
         self._readallDBPages()
+        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
         self._setSchemaForRootPages()
 
         # 3. are all leaf pages assigned to a root page? if not try to find a mapping root page by mapping schema
@@ -292,19 +304,115 @@ class SQLiteDBParser:
                     counter += 1
             dbpage["cellPointer"] = self._readPageCellPointer(page, dbpage["pageHeader"], pageNr)
 
-            if pageNr > 1 and dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+#            if pageNr > 1 and dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+            if dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
                 dbpage["leafpages"] = self._readLeafPageList(dbpage, offset)
                 dbpage["hasLeafPages"] = True
             dbpage["unallocated"] = self._readPageUnallocated(dbpage)
             dbpage["freespace"] = self._readPageFreeSpace(dbpage)
 
-            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
-                dbpage["celldata"] = self._readPageCells(dbpage, offset)
-
+#            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
+            if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
+                        or (dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE)) and (dbpage["pageHeader"]["cellQty"] > 0):
+#                dbpage["celldata"] = self._readPageCells(dbpage, offset)
+                dbpage["celldata"] = self._readCell(dbpage, offset)
 
             pageDict[pageNr] = dbpage
             offset += pageSize
         self.dbPages = pageDict
+
+    def _readCell(self, dbpage, offset):
+        if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
+            return self._readPageCells(dbpage, offset)
+            '''
+            self._readCellWithFormat(
+                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
+                [CellContent.PAYLOAD_SIZE,
+                 CellContent.RID,
+                 CellContent.PAYLOAD,
+                 CellContent.OVERFLOW_PAGE_HEAD])
+            '''
+        elif dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE:
+            self._readCellWithFormat(
+                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
+                [CellContent.PAYLOAD_SIZE,
+                 CellContent.PAYLOAD,
+                 CellContent.OVERFLOW_PAGE_HEAD])
+        elif dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+            self._readCellWithFormat(
+                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
+                [CellContent.LEFT_CHILD_PAGE_NUM,
+                 CellContent.RID])
+        elif dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE:
+            self._readCellWithFormat(
+                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
+                [CellContent.LEFT_CHILD_PAGE_NUM,
+                 CellContent.PAYLOAD_SIZE,
+                 CellContent.PAYLOAD,
+                 CellContent.OVERFLOW_PAGE_HEAD])
+        else:
+            assert False
+
+    def _readCellWithFormat(self, pageNum, cellOffset, pageType, cellContents):
+
+        return
+        cellSize = 0
+        offset = cellOffset
+
+        for content in cellContents:
+            if content == CellContent.LEFT_CHILD_PAGE_NUM:
+                (leftChildPageNumLen,
+                 leftChildPageNum) = self._getLeftChildPageNumFromCell(
+                    pageNum, offset)
+                offset += leftChildPageNumLen
+                cellSize += leftChildPageNumLen
+                cellInfo["leftChildPage"] = leftChildPageNum
+
+            elif content == CellContent.PAYLOAD_SIZE:
+                cellInfo["payload"] = {}
+                (payloadSizeLen,
+                 payloadSize) = self._getPayloadSizeFromCell(
+                    pageNum, offset)
+                offset += payloadSizeLen
+                cellSize += payloadSizeLen
+
+            elif content == CellContent.RID:
+                (ridLen, rid) = self._getRidFromCell(
+                    pageNum, offset)
+                offset += ridLen
+                cellSize += ridLen
+                cellInfo["rid"] = rid
+
+            elif content == CellContent.PAYLOAD:
+                cellInfo["payload"]["offset"] = offset
+                (headerSize, bodySize,
+                 payloadSizeInCell) = self._getPayloadFromCell(
+                    pageNum, offset)
+                offset += payloadSizeInCell
+                cellSize += payloadSizeInCell
+                cellInfo["payload"]["headerSize"] = headerSize
+                cellInfo["payload"]["bodySize"] = bodySize
+                assert payloadSize == headerSize + bodySize
+
+            elif content == CellContent.OVERFLOW_PAGE_HEAD:
+                (overflowPageHeadLen,
+                 overflowPageHead) = self._getOverflowPageHeadFromCell(
+                    pageNum, offset,
+                    cellInfo["payload"]["headerSize"] +
+                    cellInfo["payload"]["bodySize"],
+                    payloadSizeInCell)
+                offset += overflowPageHeadLen
+                cellSize += overflowPageHeadLen
+                cellInfo["overflowPage"] = overflowPageHead
+                # Read overflow page if necessary
+                if overflowPageHead is not None:
+                    self._read_overflow_pages(
+                        overflowPageHead, payloadSize - payloadSizeInCell)
+
+        cellInfo["cellSize"] = cellSize
+        self._dbinfo["pages"][pageNum]["cells"].append(cellInfo)
+
+        pass
 
     def _readPageCells(self, dbpage, offset):
         celldatalist = list()
