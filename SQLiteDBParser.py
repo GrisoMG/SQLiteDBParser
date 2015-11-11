@@ -102,7 +102,8 @@ class SQLiteDBParser:
 
         # 2. read all pages
         self._readallDBPages()
-        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
+#        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
+        self.dbSchema = self._parseDBSchema2(1)
         self._setSchemaForRootPages()
 
         # 3. are all leaf pages assigned to a root page? if not try to find a mapping root page by mapping schema
@@ -314,105 +315,11 @@ class SQLiteDBParser:
 #            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
             if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
                         or (dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE)) and (dbpage["pageHeader"]["cellQty"] > 0):
-#                dbpage["celldata"] = self._readPageCells(dbpage, offset)
-                dbpage["celldata"] = self._readCell(dbpage, offset)
+                dbpage["celldata"] = self._readPageCells(dbpage, offset)
 
             pageDict[pageNr] = dbpage
             offset += pageSize
         self.dbPages = pageDict
-
-    def _readCell(self, dbpage, offset):
-        if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
-            return self._readPageCells(dbpage, offset)
-            '''
-            self._readCellWithFormat(
-                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
-                [CellContent.PAYLOAD_SIZE,
-                 CellContent.RID,
-                 CellContent.PAYLOAD,
-                 CellContent.OVERFLOW_PAGE_HEAD])
-            '''
-        elif dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE:
-            self._readCellWithFormat(
-                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
-                [CellContent.PAYLOAD_SIZE,
-                 CellContent.PAYLOAD,
-                 CellContent.OVERFLOW_PAGE_HEAD])
-        elif dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
-            self._readCellWithFormat(
-                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
-                [CellContent.LEFT_CHILD_PAGE_NUM,
-                 CellContent.RID])
-        elif dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE:
-            self._readCellWithFormat(
-                dbpage["pageNr"], offset, dbpage["pageHeader"]["pageByte"],
-                [CellContent.LEFT_CHILD_PAGE_NUM,
-                 CellContent.PAYLOAD_SIZE,
-                 CellContent.PAYLOAD,
-                 CellContent.OVERFLOW_PAGE_HEAD])
-        else:
-            assert False
-
-    def _readCellWithFormat(self, pageNum, cellOffset, pageType, cellContents):
-
-        return
-        cellSize = 0
-        offset = cellOffset
-
-        for content in cellContents:
-            if content == CellContent.LEFT_CHILD_PAGE_NUM:
-                (leftChildPageNumLen,
-                 leftChildPageNum) = self._getLeftChildPageNumFromCell(
-                    pageNum, offset)
-                offset += leftChildPageNumLen
-                cellSize += leftChildPageNumLen
-                cellInfo["leftChildPage"] = leftChildPageNum
-
-            elif content == CellContent.PAYLOAD_SIZE:
-                cellInfo["payload"] = {}
-                (payloadSizeLen,
-                 payloadSize) = self._getPayloadSizeFromCell(
-                    pageNum, offset)
-                offset += payloadSizeLen
-                cellSize += payloadSizeLen
-
-            elif content == CellContent.RID:
-                (ridLen, rid) = self._getRidFromCell(
-                    pageNum, offset)
-                offset += ridLen
-                cellSize += ridLen
-                cellInfo["rid"] = rid
-
-            elif content == CellContent.PAYLOAD:
-                cellInfo["payload"]["offset"] = offset
-                (headerSize, bodySize,
-                 payloadSizeInCell) = self._getPayloadFromCell(
-                    pageNum, offset)
-                offset += payloadSizeInCell
-                cellSize += payloadSizeInCell
-                cellInfo["payload"]["headerSize"] = headerSize
-                cellInfo["payload"]["bodySize"] = bodySize
-                assert payloadSize == headerSize + bodySize
-
-            elif content == CellContent.OVERFLOW_PAGE_HEAD:
-                (overflowPageHeadLen,
-                 overflowPageHead) = self._getOverflowPageHeadFromCell(
-                    pageNum, offset,
-                    cellInfo["payload"]["headerSize"] +
-                    cellInfo["payload"]["bodySize"],
-                    payloadSizeInCell)
-                offset += overflowPageHeadLen
-                cellSize += overflowPageHeadLen
-                cellInfo["overflowPage"] = overflowPageHead
-                # Read overflow page if necessary
-                if overflowPageHead is not None:
-                    self._read_overflow_pages(
-                        overflowPageHead, payloadSize - payloadSizeInCell)
-
-        cellInfo["cellSize"] = cellSize
-        self._dbinfo["pages"][pageNum]["cells"].append(cellInfo)
-
-        pass
 
     def _readPageCells(self, dbpage, offset):
         celldatalist = list()
@@ -422,7 +329,7 @@ class SQLiteDBParser:
             end = cp + 2
             cellp = unpack('>H', dbpage["cellPointer"][start:end])[0]
             cellstart = offset + cellp
-            celldata = self._parseCell(self.data, cellstart)
+            celldata = self._parseCell(self.data, cellstart, dbpage["pageHeader"]["pageByte"])
             celldatalist.append(celldata)
 
         return celldatalist
@@ -534,7 +441,10 @@ class SQLiteDBParser:
         pageByte, fbOffset, cellQty, cellOffset, freebytes = pageHeader
 
         if pageByte == INTERIOR_TABLE_BTREE_PAGE:
-           rmpointer = unpack(self._ibtreefrmt, page[8:12])[0]
+           if pageNr == 1:
+               rmpointer = unpack(self._ibtreefrmt, page[108:112])[0]
+           else:
+               rmpointer = unpack(self._ibtreefrmt, page[8:12])[0]
         else:
             rmpointer = None
 
@@ -545,6 +455,77 @@ class SQLiteDBParser:
 
     def _parseDBHeader(self):
         self.dbHeaderDict = dict(zip(self._dbhdrkeys,list(self._unpackDBHeader())))
+
+    def _parseDBSchema2(self, pageNum):
+        # based on https://github.com/n0fate/walitean
+        TABLE = b'table'
+        CREATETABLE = b'CREATE TABLE'
+        buf = b''
+        dbschema = {}
+        columnsdic = {}
+        tables = []
+        dbtable = {}
+        page = self.dbPages[int(pageNum)]
+        buf = page["page"]
+        if self.hasLeafPages(page) == True:
+            for leafpage in page["leafpages"]:
+                if leafpage < self.dbHeaderDict["in_header_database_size"]:
+                    try:
+                        buf += self.dbPages[leafpage]["page"]
+                    except:
+                        pass
+
+        tables = buf.split(TABLE)
+        tables.pop(0)   # because I can not determine the right starting point
+        for table in tables:
+            columnlst = []
+            dbtable = {}
+            tbl_name = None
+            tbl_rootpage = None
+            strcolumns = None
+            tbl_name, schema = table.split(CREATETABLE)#[0].decode()
+            tbl_rootpage = unpack('B',tbl_name[tbl_name.__len__()-1:])[0]
+            tbl_name = tbl_name[:tbl_name.__len__()-1]
+            tbl_name = tbl_name[:int(tbl_name.__len__() / 2)]
+            tbl_name = tbl_name.decode()
+            dbtable['name'] = tbl_name
+            dbtable['rootpage'] = tbl_rootpage
+            strcolumns = self._findSQLCmd(schema)
+            if strcolumns == "ERROR":
+                continue
+            l = strcolumns.find(b'UNIQUE (')
+            r = strcolumns.find(b')')
+            if l > 0 and r > l:
+                strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
+            strcolumns = strcolumns.decode()
+
+            if strcolumns[0] == ' ':    # remove byte if first byte is space
+                strcolumns = strcolumns[1:]
+            strcolumns = strcolumns.replace(' REFERENCES','')
+            for column in strcolumns.split(','):
+                if column[0] == ' ':
+                    column = column[1:]
+                if str(column).startswith('PRIMARY'):
+                    continue
+                try:
+                    column.index('UNIQUE (')
+                    continue
+                except ValueError:
+                    pass
+                columninfo = []
+                if len(column.split(' ')) >= 2:
+                    columnname = column.split(' ')[0]
+                    columntype = column.split(' ')[1]
+                    columninfo.append(columnname)
+                    columninfo.append(columntype)
+                if columninfo.__len__() != 0:
+                    columnlst.append(columninfo)
+            if len(columnlst):
+                dbtable['schema'] = columnlst
+            else:
+                dbtable['schema'] = []
+            columnsdic[tbl_name] = dbtable
+        return columnsdic
 
     def _parseDBSchema(self, buf):
         # based on https://github.com/n0fate/walitean
@@ -686,8 +667,10 @@ class SQLiteDBParser:
 
     def printDBSchema(self):
         print("Parsed database schema...")
+        i=0
         for dbtable in self.dbSchema:
-            print("Table: %s" %str(dbtable))
+            i+=1
+            print("(%i) Table: %s" %(i,str(dbtable)))
             print("\tTable name: %s" %str(self.dbSchema[dbtable]['name']))
             print("\tRoot page: %s" %str(self.dbSchema[dbtable]['rootpage']))
             print("\tSchema:")
@@ -705,7 +688,6 @@ class SQLiteDBParser:
                 continue
 
             self.printTable(number=ipage, verbose=verbose, debug=debug, fspace=True, unallocated=True, deleted=True)
-
 
     def printTable(self, name=None, number=None, debug=None, verbose=None, fspace=None, unallocated=None, deleted=None):
         page = None
@@ -806,7 +788,9 @@ class SQLiteDBParser:
 
     def listAllTables(self):
 
+        i=0
         for dbtable in self.dbSchema:
+            i+=1
             tbl_name = self.dbSchema[dbtable]['name']
             pageNr = self.dbSchema[dbtable]['rootpage']
             pageType = self.dbPages[pageNr]['pageType']
@@ -816,7 +800,7 @@ class SQLiteDBParser:
             except:
                 pass
 
-            print("Page number: %5s Table name: %20s Page Type: %23s Cols: %5s" %(str(pageNr), str(tbl_name), str(pageType), str(col_count)))
+            print(" (%3i) Page number: %5s Table name: %20s Page Type: %23s Cols: %5s" %(i,str(pageNr), str(tbl_name), str(pageType), str(col_count)))
 
     '''
     Funtions borrowed from SQLiteZer
@@ -894,7 +878,7 @@ class SQLiteDBParser:
 
         return varintval,varintlen
 
-    def _parseCell(self, data,offset):
+    def _parseCell(self, data,offset, cellformat):
         """
         Parse a B-Tree Leaf Page Cell, given it's starting absolute byte offset.
         Pass absolute starting byte offset for the cell header.
@@ -902,110 +886,373 @@ class SQLiteDBParser:
 
         """
         celldatalist = list()
-        cellheader,dataoffset,payloadlen,recordnum = self._parseCellHeader(data, offset)
 
-        for field in cellheader:
-            dataoffset = int(dataoffset)
-            if field[0] == "NULL":
-                celldatalist.append(recordnum)
-            elif field[0] == "ST_INT8":
-                celldatalist.append(ord(unpack(">c",data[dataoffset:dataoffset+1])[0]))
-                dataoffset+=field[1]
-            elif field[0] == "ST_INT16":
-                celldatalist.append(unpack(">h",data[dataoffset:dataoffset+2])[0])
-                dataoffset+=field[1]
-            elif field[0] == "ST_INT24":
-                celldatalist.append("-")
-                dataoffset+=field[1]
-            elif field[0] == "ST_INT32":
-                celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
-                dataoffset+=field[1]
-            elif field[0] == "ST_INT48":
-                celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
-                dataoffset+=field[1]
-            elif field[0] == "ST_INT64":
-                celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
-                dataoffset+=8
-            elif field[0] == "ST_FLOAT":
-                celldatalist.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
-                dataoffset+=8
-            elif field[0] == "ST_C0":
-                celldatalist.append("-")
-            elif field[0] == "ST_C1":
-                celldatalist.append("-")
-            elif field[0] == "ST_BLOB":
-                celldatalist.append(data[dataoffset:dataoffset+int(field[1])])
-                dataoffset+=field[1]
-            elif field[0] == "ST_TEXT":
-                try:
-                    celldatalist.append(data[dataoffset:dataoffset+int(field[1])].decode('UTF-8'))
-                except:
+        if (cellformat == LEAF_TABLE_BTREE_PAGE):
+            cellheader,dataoffset,payloadlen,recordnum, overflowpageoffset = self._parseLeafTableCellHeader(data, offset)
+            for field in cellheader:
+                dataoffset = int(dataoffset)
+                if field[0] == "NULL":
+                    celldatalist.append(recordnum)
+                elif field[0] == "ST_INT8":
+                    celldatalist.append(ord(unpack(">c",data[dataoffset:dataoffset+1])[0]))
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT16":
+                    celldatalist.append(unpack(">h",data[dataoffset:dataoffset+2])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT24":
+                    celldatalist.append("-")
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT32":
+                    celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT48":
+                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT64":
+                    celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_FLOAT":
+                    celldatalist.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_C0":
+                    celldatalist.append("-")
+                elif field[0] == "ST_C1":
+                    celldatalist.append("-")
+                elif field[0] == "ST_BLOB":
+                    celldatalist.append(data[dataoffset:dataoffset+int(field[1])])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_TEXT":
                     try:
-                        celldatalist.append(str(data[dataoffset:dataoffset+int(field[1])]))
+                        celldatalist.append(data[dataoffset:dataoffset+int(field[1])].decode('UTF-8'))
                     except:
-                        pass
+                        try:
+                            celldatalist.append(str(data[dataoffset:dataoffset+int(field[1])]))
+                        except:
+                            pass
 
-                dataoffset+=field[1]
-            else:
-                print(field[0])
+                    dataoffset+=field[1]
+                else:
+                    print(field[0])
+            if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
+                pagechildleftnum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])
+        elif (cellformat == LEAF_INDEX_BTREE_PAGE):
+            cellheader,dataoffset,payloadlen,overflowpageoffset = self._parseLeafIndexCellHeader(data, offset)
+            for field in cellheader:
+                dataoffset = int(dataoffset)
+                if field[0] == "NULL":
+                    celldatalist.append("-")
+                elif field[0] == "ST_INT8":
+                    celldatalist.append(ord(unpack(">c",data[dataoffset:dataoffset+1])[0]))
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT16":
+                    celldatalist.append(unpack(">h",data[dataoffset:dataoffset+2])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT24":
+                    celldatalist.append("-")
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT32":
+                    celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT48":
+                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT64":
+                    celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_FLOAT":
+                    celldatalist.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_C0":
+                    celldatalist.append("-")
+                elif field[0] == "ST_C1":
+                    celldatalist.append("-")
+                elif field[0] == "ST_BLOB":
+                    celldatalist.append(data[dataoffset:dataoffset+int(field[1])])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_TEXT":
+                    try:
+                        celldatalist.append(data[dataoffset:dataoffset+int(field[1])].decode('UTF-8'))
+                    except:
+                        try:
+                            celldatalist.append(str(data[dataoffset:dataoffset+int(field[1])]))
+                        except:
+                            pass
+
+                    dataoffset+=field[1]
+                else:
+                    print(field[0])
+            if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
+                pagechildleftnum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])
+        elif (cellformat == INTERIOR_TABLE_BTREE_PAGE):
+            cellheader,dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(data, offset)
+            celldatalist.append(pagechildnum)
+            celldatalist.append(recordnum)
+        elif (cellformat == INTERIOR_INDEX_BTREE_PAGE):
+            cellheader,dataoffset,payloadlen,overflowpageoffset = self._parseLeafIndexCellHeader(data, offset)
+            '''
+            for field in cellheader:
+                dataoffset = int(dataoffset)
+                if field[0] == "NULL":
+                    celldatalist.append("-")
+                elif field[0] == "ST_INT8":
+                    celldatalist.append(ord(unpack(">c",data[dataoffset:dataoffset+1])[0]))
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT16":
+                    celldatalist.append(unpack(">h",data[dataoffset:dataoffset+2])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT24":
+                    celldatalist.append("-")
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT32":
+                    celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT48":
+                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    dataoffset+=field[1]
+                elif field[0] == "ST_INT64":
+                    celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_FLOAT":
+                    celldatalist.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
+                    dataoffset+=8
+                elif field[0] == "ST_C0":
+                    celldatalist.append("-")
+                elif field[0] == "ST_C1":
+                    celldatalist.append("-")
+                elif field[0] == "ST_BLOB":
+                    celldatalist.append(data[dataoffset:dataoffset+int(field[1])])
+                    dataoffset+=field[1]
+                elif field[0] == "ST_TEXT":
+                    try:
+                        celldatalist.append(data[dataoffset:dataoffset+int(field[1])].decode('UTF-8'))
+                    except:
+                        try:
+                            celldatalist.append(str(data[dataoffset:dataoffset+int(field[1])]))
+                        except:
+                            pass
+
+                    dataoffset+=field[1]
+                else:
+                    print(field[0])
+                '''
+            if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
+                pagechildleftnum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])
+        else:
+            pass
 
         return celldatalist
 
-    def _parseCellHeader(self, data,offset):
-            """
-            Parse a B-Tree Leaf Page Cell Header, given it's starting absolute byte
-            offset.
-            Pass absolute starting byte offset for the cell header to be decoded.
-            Returns tuple containing a list of tuples in the form
-            [(String type,int length),...], and the starting offset of the payload
-            fields.
-            """
-            headerlist = list()
+    def _getPayloadSizeInCell(self, payloadWholeSize):
+        """
+        @note
+        See: README.org - Track overflow pages
 
-            # Payload length
-            payloadlen,length = self._getVarIntOfs(data, offset)
-            offset+=length
-            # Record Number
-            recordnum,length = self._getVarIntOfs(data, offset)
-            offset+=length
-            # Payload Header Length
-            payloadheaderlen,length = self._getVarIntOfs(data, offset)
-            payloadheaderlenofs = offset + payloadheaderlen
-            offset+=length
-            # Payload Fields
-            while offset < (payloadheaderlenofs):
-                fieldtype,length = self._getVarIntOfs(data, offset)
-                # Determine Serial Type
-                if fieldtype == 0:
-                    headerlist.append(("NULL",0))
-                elif fieldtype == 1:
-                    headerlist.append(("ST_INT8",1))
-                elif fieldtype == 2:
-                    headerlist.append(("ST_INT16",2))
-                elif fieldtype == 3:
-                    headerlist.append(("ST_INT24",3))
-                elif fieldtype == 4:
-                    headerlist.append(("ST_INT32",4))
-                elif fieldtype == 5:
-                    headerlist.append(("ST_INT48",6))
-                elif fieldtype == 6:
-                    headerlist.append(("ST_INT64",8))
-                elif fieldtype == 7:
-                    headerlist.append(("ST_FLOAT",8))
-                elif fieldtype == 8:
-                    headerlist.append(("ST_C0",0))
-                elif fieldtype == 9:
-                    headerlist.append(("ST_C1",0))
-                elif fieldtype > 11:
-                    if (fieldtype%2) == 0:
-                        headerlist.append(("ST_BLOB",(fieldtype-12)/2))
-                    else:
-                        headerlist.append(("ST_TEXT",(fieldtype-13)/2))
+        @return
+        Local payload size for this cell.
+        """
+        payloadSize = payloadWholeSize
+        usableSize = self.dbHeaderDict["pageSize"]
+        maxLocal = usableSize - 35
+        minLocal = ((usableSize - 12) * 32 / 255) - 23
+        if payloadSize <= maxLocal:
+            return payloadSize
+        localSize = minLocal + ((payloadSize - minLocal) % (usableSize - 4))
+        sizeInThisPage = minLocal if localSize > maxLocal else localSize
+        return sizeInThisPage
+
+    def _parseLeafTableCellHeader(self, data, offset):
+        """
+        Parse a B-Tree Leaf Page Cell Header, given it's starting absolute byte
+        offset.
+        Pass absolute starting byte offset for the cell header to be decoded.
+        Returns tuple containing a list of tuples in the form
+        [(String type,int length),...], and the starting offset of the payload
+        fields.
+        """
+        headerlist = list()
+        overflowpagenum = 0
+        overflowpageoffset = offset
+        # Payload length
+        payloadlen,length = self._getVarIntOfs(data, offset)
+        offset+=length
+        overflowpageoffset+=length
+        # Record Number
+        recordnum,length = self._getVarIntOfs(data, offset)
+        offset+=length
+        # Payload Header Length
+        payloadheaderlen,length = self._getVarIntOfs(data, offset)
+        payloadheaderlenofs = offset + payloadheaderlen
+        offset+=length
+
+        overflowpageoffset += self._getPayloadSizeInCell(payloadlen)
+        overflowpageoffset = int(overflowpageoffset)
+        overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
+
+        # Payload Fields
+        while offset < (payloadheaderlenofs):
+            fieldtype,length = self._getVarIntOfs(data, offset)
+            # Determine Serial Type
+            if fieldtype == 0:
+                headerlist.append(("NULL",0))
+            elif fieldtype == 1:
+                headerlist.append(("ST_INT8",1))
+            elif fieldtype == 2:
+                headerlist.append(("ST_INT16",2))
+            elif fieldtype == 3:
+                headerlist.append(("ST_INT24",3))
+            elif fieldtype == 4:
+                headerlist.append(("ST_INT32",4))
+            elif fieldtype == 5:
+                headerlist.append(("ST_INT48",6))
+            elif fieldtype == 6:
+                headerlist.append(("ST_INT64",8))
+            elif fieldtype == 7:
+                headerlist.append(("ST_FLOAT",8))
+            elif fieldtype == 8:
+                headerlist.append(("ST_C0",0))
+            elif fieldtype == 9:
+                headerlist.append(("ST_C1",0))
+            elif fieldtype > 11:
+                if (fieldtype%2) == 0:
+                    headerlist.append(("ST_BLOB",(fieldtype-12)/2))
                 else:
-                    headerlist.append(("Reserved: %s" % str(fieldtype),0))
-                offset+=length
+                    headerlist.append(("ST_TEXT",(fieldtype-13)/2))
+            else:
+                headerlist.append(("Reserved: %s" % str(fieldtype),0))
+            offset+=length
 
-            return headerlist, offset, payloadlen, recordnum
+        return headerlist, offset, payloadlen, recordnum, overflowpageoffset
+
+    def _parseLeafIndexCellHeader(self, data,offset):
+
+        headerlist = list()
+        overflowpageoffset = offset
+
+        # Payload length
+        payloadlen,length = self._getVarIntOfs(data, offset)
+        offset+=length
+        overflowpageoffset+=length
+        # Payload Header Length
+        payloadheaderlen,length = self._getVarIntOfs(data, offset)
+        payloadheaderlenofs = offset + payloadheaderlen
+        offset+=length
+
+        overflowpageoffset += self._getPayloadSizeInCell(payloadlen)
+        overflowpageoffset = int(overflowpageoffset)
+#        overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
+
+        # Payload Fields
+        while offset < (payloadheaderlenofs):
+            fieldtype,length = self._getVarIntOfs(data, offset)
+            # Determine Serial Type
+            if fieldtype == 0:
+                headerlist.append(("NULL",0))
+            elif fieldtype == 1:
+                headerlist.append(("ST_INT8",1))
+            elif fieldtype == 2:
+                headerlist.append(("ST_INT16",2))
+            elif fieldtype == 3:
+                headerlist.append(("ST_INT24",3))
+            elif fieldtype == 4:
+                headerlist.append(("ST_INT32",4))
+            elif fieldtype == 5:
+                headerlist.append(("ST_INT48",6))
+            elif fieldtype == 6:
+                headerlist.append(("ST_INT64",8))
+            elif fieldtype == 7:
+                headerlist.append(("ST_FLOAT",8))
+            elif fieldtype == 8:
+                headerlist.append(("ST_C0",0))
+            elif fieldtype == 9:
+                headerlist.append(("ST_C1",0))
+            elif fieldtype > 11:
+                if (fieldtype%2) == 0:
+                    headerlist.append(("ST_BLOB",(fieldtype-12)/2))
+                else:
+                    headerlist.append(("ST_TEXT",(fieldtype-13)/2))
+            else:
+                headerlist.append(("Reserved: %s" % str(fieldtype),0))
+            offset+=length
+
+        return headerlist, offset, payloadlen, overflowpageoffset
+
+    def _parseInteriorTableCellHeader(self, data,offset):
+        """
+        Parse a B-Tree Leaf Page Cell Header, given it's starting absolute byte
+        offset.
+        Pass absolute starting byte offset for the cell header to be decoded.
+        Returns tuple containing a list of tuples in the form
+        [(String type,int length),...], and the starting offset of the payload
+        fields.
+        """
+        headerlist = list()
+
+        # pagenumleftchild length
+        pagechildleftnum = unpack(">I",data[offset:offset+4])
+        offset+=4
+        # Record Number
+        recordnum,length = self._getVarIntOfs(data, offset)
+        offset+=length
+
+        return headerlist, offset, pagechildleftnum[0], recordnum
+
+    def _parseInteriorIndexCellHeader(self, data,offset):
+
+        headerlist = list()
+        overflowpageoffset = offset
+
+        # pagenumleftchild length
+        pagechildleftnum = unpack(">I",data[offset:offset+4])
+        offset+=4
+
+        # Payload length
+        payloadlen,length = self._getVarIntOfs(data, offset)
+        offset+=length
+        overflowpageoffset+=length
+        # Payload Header Length
+        payloadheaderlen,length = self._getVarIntOfs(data, offset)
+        payloadheaderlenofs = offset + payloadheaderlen
+        offset+=length
+
+        overflowpageoffset += self._getPayloadSizeInCell(payloadlen)
+        overflowpageoffset = int(overflowpageoffset)
+        overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
+
+        # Payload Fields
+        while offset < (payloadheaderlenofs):
+            fieldtype,length = self._getVarIntOfs(data, offset)
+            # Determine Serial Type
+            if fieldtype == 0:
+                headerlist.append(("NULL",0))
+            elif fieldtype == 1:
+                headerlist.append(("ST_INT8",1))
+            elif fieldtype == 2:
+                headerlist.append(("ST_INT16",2))
+            elif fieldtype == 3:
+                headerlist.append(("ST_INT24",3))
+            elif fieldtype == 4:
+                headerlist.append(("ST_INT32",4))
+            elif fieldtype == 5:
+                headerlist.append(("ST_INT48",6))
+            elif fieldtype == 6:
+                headerlist.append(("ST_INT64",8))
+            elif fieldtype == 7:
+                headerlist.append(("ST_FLOAT",8))
+            elif fieldtype == 8:
+                headerlist.append(("ST_C0",0))
+            elif fieldtype == 9:
+                headerlist.append(("ST_C1",0))
+            elif fieldtype > 11:
+                if (fieldtype%2) == 0:
+                    headerlist.append(("ST_BLOB",(fieldtype-12)/2))
+                else:
+                    headerlist.append(("ST_TEXT",(fieldtype-13)/2))
+            else:
+                headerlist.append(("Reserved: %s" % str(fieldtype),0))
+            offset+=length
+
+        return headerlist, offset, payloadlen, overflowpageoffset
+
     '''
     End of SQLiteZer functions
     '''
