@@ -102,7 +102,6 @@ class SQLiteDBParser:
 
         # 2. read all pages
         self._readallDBPages()
-#        self.dbSchema = self._parseDBSchema(self.data[:self.dbHeaderDict["pageSize"]])
         self.dbSchema = self._parseDBSchema2(1)
         self._setSchemaForRootPages()
 
@@ -189,6 +188,8 @@ class SQLiteDBParser:
         num_of_cols = celldata[0].__len__()
         possibleschemalist = list()
         for schema in self.dbSchema:
+            if not self.dbSchema[schema]['type'] == 'table':
+                continue
             if num_of_cols == self.dbSchema[schema]["schema"].__len__():
                 possibleschemalist.append(self.dbSchema[schema]["rootpage"])
         return possibleschemalist
@@ -208,17 +209,35 @@ class SQLiteDBParser:
         start = 0
         end = 0
         i = 0
+        bindata = False
+
+        try:
+            if chr(buf[0]):
+                bindata = True
+        except:
+            bindata = False
 
         while i < buf.__len__():
-            if chr(buf[i]) == '(':
-                if start == 0:
-                    start = i
-                open += 1
-            if chr(buf[i]) == ')':
-                open -= 1
-                if open == 0:
-                    end = i
-                    break
+            if not bindata:
+                if buf[i] == '(':
+                    if start == 0:
+                        start = i
+                    open += 1
+                if buf[i] == ')':
+                    open -= 1
+                    if open == 0:
+                        end = i
+                        break
+            else:
+                if chr(buf[i]) == '(':
+                    if start == 0:
+                        start = i
+                    open += 1
+                if chr(buf[i]) == ')':
+                    open -= 1
+                    if open == 0:
+                        end = i
+                        break
             i += 1
         if end <= start:
             return "ERROR"
@@ -228,6 +247,8 @@ class SQLiteDBParser:
     def _setSchemaForRootPages(self):
 
         for table in self.dbSchema:
+            if not self.dbSchema[table]['type'] == 'table':
+                continue
             colheader = list()
             tblinfo = dict()
             for x in self.dbSchema[table]["schema"]:
@@ -470,6 +491,70 @@ class SQLiteDBParser:
         if self.hasLeafPages(page) == True:
             for leafpage in page["leafpages"]:
                 if leafpage < self.dbHeaderDict["in_header_database_size"]:
+                    if self.hasCelldata(self.dbPages[leafpage]):
+                        tables += self.dbPages[leafpage]["celldata"]
+
+        for table in tables:
+            columnlst = []
+            dbtable = {}
+            strcolumns = None
+            dbtable['type'] = table[0]
+            dbtable['name'] = table[1]
+            dbtable['rootpage'] = table[3]
+
+            if dbtable['type'] == 'table':
+                strcolumns = self._findSQLCmd(table[4])
+                if strcolumns == "ERROR":
+                    continue
+                l = strcolumns.find('UNIQUE (')
+                r = strcolumns.find(')')
+                if l > 0 and r > l:
+                    strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
+
+                if strcolumns[0] == ' ':    # remove byte if first byte is space
+                    strcolumns = strcolumns[1:]
+                strcolumns = strcolumns.replace(' REFERENCES','')
+                for column in strcolumns.split(','):
+                    if column[0] == ' ':
+                        column = column[1:]
+                    if str(column).startswith('PRIMARY'):
+                        continue
+                    try:
+                        column.index('UNIQUE (')
+                        continue
+                    except ValueError:
+                        pass
+                    columninfo = []
+                    if len(column.split(' ')) >= 2:
+                        columnname = column.split(' ')[0]
+                        columntype = column.split(' ')[1]
+                        columninfo.append(columnname)
+                        columninfo.append(columntype)
+                    if columninfo.__len__() != 0:
+                        columnlst.append(columninfo)
+
+                if len(columnlst):
+                    dbtable['schema'] = columnlst
+                else:
+                    dbtable['schema'] = []
+
+            columnsdic[dbtable['name']] = dbtable
+        return columnsdic
+
+    def _parseDBSchema(self, pageNum):
+        # based on https://github.com/n0fate/walitean
+        TABLE = b'table'
+        CREATETABLE = b'CREATE TABLE'
+        buf = b''
+        dbschema = {}
+        columnsdic = {}
+        tables = []
+        dbtable = {}
+        page = self.dbPages[int(pageNum)]
+        buf = page["page"]
+        if self.hasLeafPages(page) == True:
+            for leafpage in page["leafpages"]:
+                if leafpage < self.dbHeaderDict["in_header_database_size"]:
                     try:
                         buf += self.dbPages[leafpage]["page"]
                     except:
@@ -483,11 +568,15 @@ class SQLiteDBParser:
             tbl_name = None
             tbl_rootpage = None
             strcolumns = None
-            tbl_name, schema = table.split(CREATETABLE)#[0].decode()
-            tbl_rootpage = unpack('B',tbl_name[tbl_name.__len__()-1:])[0]
-            tbl_name = tbl_name[:tbl_name.__len__()-1]
-            tbl_name = tbl_name[:int(tbl_name.__len__() / 2)]
-            tbl_name = tbl_name.decode()
+            try:
+                tbl_name, schema = table.split(CREATETABLE)#[0].decode()
+                tbl_rootpage = unpack('B',tbl_name[tbl_name.__len__()-1:])[0]
+                tbl_name = tbl_name[:tbl_name.__len__()-1]
+                tbl_name = tbl_name[:int(tbl_name.__len__() / 2)]
+                tbl_name = tbl_name.decode()
+            except:
+                pass
+            dbtable['type'] == 'table'
             dbtable['name'] = tbl_name
             dbtable['rootpage'] = tbl_rootpage
             strcolumns = self._findSQLCmd(schema)
@@ -497,67 +586,10 @@ class SQLiteDBParser:
             r = strcolumns.find(b')')
             if l > 0 and r > l:
                 strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
-            strcolumns = strcolumns.decode()
-
-            if strcolumns[0] == ' ':    # remove byte if first byte is space
-                strcolumns = strcolumns[1:]
-            strcolumns = strcolumns.replace(' REFERENCES','')
-            for column in strcolumns.split(','):
-                if column[0] == ' ':
-                    column = column[1:]
-                if str(column).startswith('PRIMARY'):
-                    continue
-                try:
-                    column.index('UNIQUE (')
-                    continue
-                except ValueError:
-                    pass
-                columninfo = []
-                if len(column.split(' ')) >= 2:
-                    columnname = column.split(' ')[0]
-                    columntype = column.split(' ')[1]
-                    columninfo.append(columnname)
-                    columninfo.append(columntype)
-                if columninfo.__len__() != 0:
-                    columnlst.append(columninfo)
-            if len(columnlst):
-                dbtable['schema'] = columnlst
-            else:
-                dbtable['schema'] = []
-            columnsdic[tbl_name] = dbtable
-        return columnsdic
-
-    def _parseDBSchema(self, buf):
-        # based on https://github.com/n0fate/walitean
-        TABLE = b'table'
-        CREATETABLE = b'CREATE TABLE'
-        dbschema = {}
-        columnsdic = {}
-        tables = []
-        dbtable = {}
-        tables = buf.split(TABLE)
-        tables.pop(0)   # because I can not determine the right starting point
-        for table in tables:
-            columnlst = []
-            dbtable = {}
-            tbl_name = None
-            tbl_rootpage = None
-            strcolumns = None
-            tbl_name, schema = table.split(CREATETABLE)#[0].decode()
-            tbl_rootpage = unpack('B',tbl_name[tbl_name.__len__()-1:])[0]
-            tbl_name = tbl_name[:tbl_name.__len__()-1]
-            tbl_name = tbl_name[:int(tbl_name.__len__() / 2)]
-            tbl_name = tbl_name.decode()
-            dbtable['name'] = tbl_name
-            dbtable['rootpage'] = tbl_rootpage
-            strcolumns = self._findSQLCmd(schema)
-            if strcolumns == "ERROR":
-                continue
-            l = strcolumns.find(b'UNIQUE (')
-            r = strcolumns.find(b')')
-            if l > 0 and r > l:
-                strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
-            strcolumns = strcolumns.decode()
+            try:
+                strcolumns = strcolumns.decode()
+            except:
+                strcolumns = "error"
 
             if strcolumns[0] == ' ':    # remove byte if first byte is space
                 strcolumns = strcolumns[1:]
@@ -673,9 +705,10 @@ class SQLiteDBParser:
             print("(%i) Table: %s" %(i,str(dbtable)))
             print("\tTable name: %s" %str(self.dbSchema[dbtable]['name']))
             print("\tRoot page: %s" %str(self.dbSchema[dbtable]['rootpage']))
-            print("\tSchema:")
-            for key, value in self.dbSchema[dbtable]['schema']:
-                print("\t\t %s:\t%s" %(str(key),str(value)))
+            if self.dbSchema[dbtable]['type']== 'table':
+                print("\tSchema:")
+                for key, value in self.dbSchema[dbtable]['schema']:
+                    print("\t\t %s:\t%s" %(str(key),str(value)))
 
     def printDBData(self, debug=None, verbose=None):
         if debug is not None:
@@ -792,15 +825,20 @@ class SQLiteDBParser:
         for dbtable in self.dbSchema:
             i+=1
             tbl_name = self.dbSchema[dbtable]['name']
+            tbl_type = self.dbSchema[dbtable]['type']
             pageNr = self.dbSchema[dbtable]['rootpage']
-            pageType = self.dbPages[pageNr]['pageType']
+            if pageNr == "-" or pageNr is None:
+                pageNr = ""
+                pageType = ""
+            else:
+                pageType = self.dbPages[pageNr]['pageType']
             col_count = 0
             try:
                 col_count = self.dbSchema[dbtable]['schema'].__len__()
             except:
                 pass
 
-            print(" (%3i) Page number: %5s Table name: %20s Page Type: %23s Cols: %5s" %(i,str(pageNr), str(tbl_name), str(pageType), str(col_count)))
+            print(" (%3i) Page number: %5s Table name: %45s Table type: %7s Page Type: %23s Cols: %5s" %(i,str(pageNr), str(tbl_name), str(tbl_type), str(pageType), str(col_count)))
 
     '''
     Funtions borrowed from SQLiteZer
@@ -1086,7 +1124,7 @@ class SQLiteDBParser:
 
         overflowpageoffset += self._getPayloadSizeInCell(payloadlen)
         overflowpageoffset = int(overflowpageoffset)
-        overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
+#        overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
 
         # Payload Fields
         while offset < (payloadheaderlenofs):
