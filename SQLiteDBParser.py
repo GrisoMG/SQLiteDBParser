@@ -30,8 +30,8 @@ from struct import unpack
 from optparse import OptionParser, OptionGroup
 import sys
 
-VERSION = '0.8'
-BUILD = '20150819'
+VERSION = '0.9'
+BUILD = '20151112'
 
 GPLNOTICE = '   Copyright (C) 2015 GrisoMG\n\
     This program comes with ABSOLUTELY NO WARRANTY\n\
