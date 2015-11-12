@@ -28,7 +28,7 @@ __author__ = 'grisomg'
 
 from struct import unpack
 from optparse import OptionParser, OptionGroup
-import sys
+import sys, operator
 
 VERSION = '0.8'
 BUILD = '20150819'
@@ -823,10 +823,12 @@ class SQLiteDBParser:
 
         i=0
         print("Nr".center(6) + "Page Num".center(10) + "Table Name".center(46) + "Table Type".center(10) + "Page Type".center(25) + "Cols".center(6))
-        for dbtable in self.dbSchema:
+        for dbtable in sorted(self.dbSchema, key=lambda table: table[2]):
             i+=1
             tbl_name = self.dbSchema[dbtable]['name']
             tbl_type = self.dbSchema[dbtable]['type']
+            if tbl_type == "table":
+                tbl_type = "TABLE"
             pageNr = self.dbSchema[dbtable]['rootpage']
             if pageNr == "-" or pageNr is None:
                 pageNr = ""
