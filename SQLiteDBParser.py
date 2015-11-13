@@ -48,6 +48,7 @@ LEAF_TABLE_BTREE_PAGE = 13
 INTERIOR_OFFSET = 12
 LEAF_OFFSET = 8
 
+sql_type = ('table', 'trigger', 'index', 'view')
 
 class CellContent:
     LEFT_CHILD_PAGE_NUM = "left child page num"
@@ -102,10 +103,7 @@ class SQLiteDBParser:
 
         # 2. read all pages
         self._readallDBPages()
-        if self.hasLeafPages(1) == True:
-            self.dbSchema = self._parseDBSchema(1)
-        else:
-            self.dbSchema = self._parseDBSchemaFromBuf(1)
+        self.dbSchema = self._parseDBSchema(1)
         self._setSchemaForRootPages()
 
         # 3. are all leaf pages assigned to a root page? if not try to find a mapping root page by mapping schema
@@ -490,7 +488,7 @@ class SQLiteDBParser:
         tables = []
         dbtable = {}
         page = self.dbPages[int(pageNum)]
-        buf = page["page"]
+        tables = page["celldata"]
         if self.hasLeafPages(page) == True:
             for leafpage in page["leafpages"]:
                 if leafpage < self.dbHeaderDict["in_header_database_size"]:
@@ -501,9 +499,12 @@ class SQLiteDBParser:
             columnlst = []
             dbtable = {}
             strcolumns = None
+            if not table[0] in sql_type:
+                continue
             dbtable['type'] = table[0]
             dbtable['name'] = table[1]
             dbtable['rootpage'] = table[3]
+
 
             if dbtable['type'] == 'table':
                 strcolumns = self._findSQLCmd(table[4])
@@ -543,78 +544,6 @@ class SQLiteDBParser:
 
             columnsdic[dbtable['name']] = dbtable
         return columnsdic
-
-
-    def _parseDBSchemaFromBuf(self, pageNum):
-        # based on https://github.com/n0fate/walitean
-        TABLE = b'table'
-        CREATETABLE = b'CREATE TABLE'
-        buf = b''
-        dbschema = {}
-        columnsdic = {}
-        tables = []
-        dbtable = {}
-        page = self.dbPages[int(pageNum)]
-        buf = page["page"]
-        tables = buf.split(TABLE)
-        tables.pop(0)   # because I can not determine the right starting point
-        for table in tables:
-            columnlst = []
-            dbtable = {}
-            tbl_name = None
-            tbl_rootpage = None
-            strcolumns = None
-            try:
-                tbl_name, schema = table.split(CREATETABLE)#[0].decode()
-                tbl_rootpage = unpack('B',tbl_name[tbl_name.__len__()-1:])[0]
-                tbl_name = tbl_name[:tbl_name.__len__()-1]
-                tbl_name = tbl_name[:int(tbl_name.__len__() / 2)]
-                tbl_name = tbl_name.decode()
-            except:
-                pass
-            dbtable['type'] = 'table'
-            dbtable['name'] = tbl_name
-            dbtable['rootpage'] = tbl_rootpage
-            strcolumns = self._findSQLCmd(schema)
-            if strcolumns == "ERROR":
-                continue
-            l = strcolumns.find(b'UNIQUE (')
-            r = strcolumns.find(b')')
-            if l > 0 and r > l:
-                strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
-            try:
-                strcolumns = strcolumns.decode()
-            except:
-                strcolumns = "error"
-
-            if strcolumns[0] == ' ':    # remove byte if first byte is space
-                strcolumns = strcolumns[1:]
-            strcolumns = strcolumns.replace(' REFERENCES','')
-            for column in strcolumns.split(','):
-                if column[0] == ' ':
-                    column = column[1:]
-                if str(column).startswith('PRIMARY'):
-                    continue
-                try:
-                    column.index('UNIQUE (')
-                    continue
-                except ValueError:
-                    pass
-                columninfo = []
-                if len(column.split(' ')) >= 2:
-                    columnname = column.split(' ')[0]
-                    columntype = column.split(' ')[1]
-                    columninfo.append(columnname)
-                    columninfo.append(columntype)
-                if columninfo.__len__() != 0:
-                    columnlst.append(columninfo)
-            if len(columnlst):
-                dbtable['schema'] = columnlst
-            else:
-                dbtable['schema'] = []
-            columnsdic[tbl_name] = dbtable
-        return columnsdic
-
 
     def _unpackDBHeader(self):
         try:
