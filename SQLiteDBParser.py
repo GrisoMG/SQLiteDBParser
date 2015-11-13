@@ -91,6 +91,7 @@ class SQLiteDBParser:
         self.dbSchema = {}
         self.dbPages = []
         self.lPagesWithoutRoot = []
+        self.overflowpages = []
 
         # 1. read db file, parse header, check if valid sqlite database, parse schema, get page offsets
         self._readDBFile()
@@ -103,11 +104,18 @@ class SQLiteDBParser:
 
         # 2. read all pages
         self._readallDBPages()
+        self._markOverflowPages()
         self.dbSchema = self._parseDBSchema(1)
         self._setSchemaForRootPages()
 
         # 3. are all leaf pages assigned to a root page? if not try to find a mapping root page by mapping schema
         self._lPagesWithoutRoot()
+
+    def _markOverflowPages(self):
+
+        for page in self.dbPages:
+            if self.dbPages[page]['pageNr'] in self.overflowpages:
+                self.dbPages[page]['pageType'] = 'Overflow Page'
 
     def isSqliteDB(self):
 
@@ -285,63 +293,70 @@ class SQLiteDBParser:
         pageSize = self.dbHeaderDict["pageSize"]
         pageNr = 0
 
-        pageHeader = []
         pageDict = {}
-        counter = 0
         for offset in self.pageOffsets:
             dbpage = {}
             pageNr += 1
 
-            page = self.data[offset: offset + pageSize]
+            dbpage = self._readDBPage(pageNr, offset)
+            pageDict[pageNr] = dbpage
+            self.dbPages = pageDict
+            offset += pageSize
 
-            if pageNr == 2 and self.dbHeaderDict["incremental_vacuum"] > 0:
-                #in this case, the page is a pointer map
-                self._readPointerMap(page)
+    def _readDBPage(self, pageNr, offset):
 
-            pageHeader = self._parsePageHeader(page, pageNr)
-            dbpage["page"] = page
-            dbpage["pageNr"] = pageNr
-            dbpage["pageHeader"] = pageHeader
-            dbpage["isRootPage"] = False
+        pageSize = self.dbHeaderDict["pageSize"]
+        pageHeader = []
+        counter = 0
+        dbpage = {}
+        page = self.data[offset: offset + pageSize]
 
-            dbpage["celldata"] = list()
-            dbpage["deleteddata"] = list()
+        if pageNr == 2 and self.dbHeaderDict["incremental_vacuum"] > 0:
+            #in this case, the page is a pointer map
+            self._readPointerMap(page)
 
-            if dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE:
-                dbpage["pageType"] = "interior index b-tree"
-                if pageNr == 2:
-                    counter += 1
-            elif dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
-                dbpage["pageType"] = "interior table b-tree"
-                if pageNr == 2:
-                    counter += 1
-            elif dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE:
-                dbpage["pageType"] = "leaf index b-tree"
-            elif dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE:
-                dbpage["pageType"] = "leaf table b-tree"
-            elif pageNr == 2 and self.dbHeaderDict["incremental_vacuum"] > 0:
-                dbpage["pageType"] = "pointer map"
-            else:
-                dbpage["pageType"] = "Unknown"
-                if pageNr == 2 and (dbpage["pageType"] in (3,4)):
-                    counter += 1
-            dbpage["cellPointer"] = self._readPageCellPointer(page, dbpage["pageHeader"], pageNr)
+        pageHeader = self._parsePageHeader(page, pageNr)
+        dbpage["page"] = page
+        dbpage["pageNr"] = pageNr
+        dbpage["pageHeader"] = pageHeader
+        dbpage["isRootPage"] = False
+
+        dbpage["celldata"] = list()
+        dbpage["deleteddata"] = list()
+
+        if dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE:
+            dbpage["pageType"] = "interior index b-tree"
+            if pageNr == 2:
+                counter += 1
+        elif dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+            dbpage["pageType"] = "interior table b-tree"
+            if pageNr == 2:
+                counter += 1
+        elif dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE:
+            dbpage["pageType"] = "leaf index b-tree"
+        elif dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE:
+            dbpage["pageType"] = "leaf table b-tree"
+        elif pageNr == 2 and self.dbHeaderDict["incremental_vacuum"] > 0:
+            dbpage["pageType"] = "pointer map"
+        else:
+            dbpage["pageType"] = "Unknown"
+            if pageNr == 2 and (dbpage["pageType"] in (3,4)):
+                counter += 1
+        dbpage["cellPointer"] = self._readPageCellPointer(page, dbpage["pageHeader"], pageNr)
 
 #            if pageNr > 1 and dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
-            if dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
-                dbpage["leafpages"] = self._readLeafPageList(dbpage, offset)
-                dbpage["hasLeafPages"] = True
-            dbpage["unallocated"] = self._readPageUnallocated(dbpage)
-            dbpage["freespace"] = self._readPageFreeSpace(dbpage)
+        if dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+            dbpage["leafpages"] = self._readLeafPageList(dbpage, offset)
+            dbpage["hasLeafPages"] = True
+        dbpage["unallocated"] = self._readPageUnallocated(dbpage)
+        dbpage["freespace"] = self._readPageFreeSpace(dbpage)
 
 #            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
-            if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
-                        or (dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE)) and (dbpage["pageHeader"]["cellQty"] > 0):
-                dbpage["celldata"] = self._readPageCells(dbpage, offset)
+        if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
+                    or (dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE)) and (dbpage["pageHeader"]["cellQty"] > 0):
+            dbpage["celldata"] = self._readPageCells(dbpage, offset)
 
-            pageDict[pageNr] = dbpage
-            offset += pageSize
-        self.dbPages = pageDict
+        return dbpage
 
     def _readPageCells(self, dbpage, offset):
         celldatalist = list()
@@ -643,7 +658,7 @@ class SQLiteDBParser:
             verbose = True
 
         for ipage in self.dbPages:
-            if ipage == 1:
+            if ipage == 1 or self.dbPages[ipage]['pageType'] == "Overflow Page":
                 continue
 
             self.printTable(number=ipage, verbose=verbose, debug=debug, fspace=True, unallocated=True, deleted=True)
@@ -845,6 +860,20 @@ class SQLiteDBParser:
 
         return varintval,varintlen
 
+    def _getoverflowdata(self, pageNr):
+
+        overlfowdata = b''
+        pagenum = int(pageNr)-1
+        while pagenum > 0 and pagenum < self.dbHeaderDict['in_header_database_size']:
+            self.overflowpages.append(pagenum+1)
+            offset = pagenum * self.dbHeaderDict['pageSize']
+            next_pagenum = unpack('>I', self.data[offset:offset+4])[0] - 1
+            start = offset + 5
+            end = offset + self.dbHeaderDict['pageSize'] - self.dbHeaderDict['unused_reserved_space']
+            overlfowdata += self.data[start:end]
+            pagenum = int(next_pagenum)
+        return overlfowdata
+
     def _parseCell(self, data,offset, cellformat):
         """
         Parse a B-Tree Leaf Page Cell, given it's starting absolute byte offset.
@@ -859,9 +888,19 @@ class SQLiteDBParser:
         recordnum = None
         overflowpageoffset = None
         overflowpagenum = None
+        payload = b''
 
         if (cellformat == LEAF_TABLE_BTREE_PAGE):
             cellheader,dataoffset,payloadlen,recordnum, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
+            end = + int(self._getPayloadSizeInCell(payloadlen))
+            payload = data[dataoffset:dataoffset + end]
+            if (overflowpagenum > 0) and (overflowpagenum is not None):
+                payload += self._getoverflowdata(overflowpagenum)
+            '''
+            overflow test
+            '''
+            data = payload
+            dataoffset = 0
             for field in cellheader:
                 dataoffset = int(dataoffset)
                 if field[0] == "NULL":
@@ -892,7 +931,8 @@ class SQLiteDBParser:
                 elif field[0] == "ST_C1":
                     celldatalist.append("-")
                 elif field[0] == "ST_BLOB":
-                    celldatalist.append(data[dataoffset:dataoffset+int(field[1])])
+                    cell = data[dataoffset:dataoffset+int(field[1])]
+                    celldatalist.append(cell)
                     dataoffset+=field[1]
                 elif field[0] == "ST_TEXT":
                     try:
