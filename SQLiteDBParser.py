@@ -280,6 +280,8 @@ class SQLiteDBParser:
     def _setSchemaForRootPages(self):
 
         for table in self.dbSchema:
+            if not isinstance(self.dbSchema[table]["rootpage"], int):
+                continue
             if not self.dbSchema[table]['type'] == 'table':
                 continue
             colheader = list()
