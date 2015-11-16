@@ -28,7 +28,7 @@ __author__ = 'grisomg'
 
 from struct import unpack
 from optparse import OptionParser, OptionGroup
-import sys, operator
+import sys, tempfile, operator
 
 VERSION = '0.9'
 BUILD = '20151112'
@@ -37,6 +37,13 @@ GPLNOTICE = '   Copyright (C) 2015 GrisoMG\n\
     This program comes with ABSOLUTELY NO WARRANTY\n\
     This is free software, and you are welcome to redistribute it\n\
     under certain conditions'
+
+
+JPGHEADER = '\xff\xd8\xff\xe0'
+JPGIDENT =  'JFIF\0'
+
+MA4HEADER = '\x10\x00\x00\x00\x1c\x66\x74'
+
 
 SQLITE_SIGNATURE = b'SQLite format 3\x00'
 
@@ -80,9 +87,18 @@ class SQLiteDBParser:
     _ptrmapfrmt = '>bI'
     _ptrmaphdrkeys = ['pageType', 'pageNr']
 
-    def __init__(self, sqlitedb):
+    def __init__(self, options):
 
-        self.sqlitedb = sqlitedb
+        self.opt = {'sqlitedb': '', 'debug':False, 'bin2out':False, 'bin2file':False, 'freespace':False, 'unallocated':False, 'deleted':False}
+        self.opt['sqlitedb'] = options.infile
+        self.opt['debug'] = options.debug
+        self.opt['bin2out'] = options.bin2out
+        self.opt['bin2file'] = options.bin2file
+        self.opt['freespace'] = options.freespace
+        self.opt['unallocated'] = options.unallocated
+        self.opt['deleted'] = options.deleted
+        self.opt['verbose'] = False # future use :-)
+
         self.data = b''
         self.pageOffsets = []
         self.dbInfo = dict()
@@ -463,7 +479,7 @@ class SQLiteDBParser:
 
     def _readDBFile(self):
         try:
-            f=open(self.sqlitedb,"rb")
+            f=open(self.opt['sqlitedb'],"rb")
             self.data = f.read()
         except:
             print ("File not Found")
@@ -578,6 +594,33 @@ class SQLiteDBParser:
                 ret = ret + chr(ch)
         return ret.strip()
 
+
+    def _makeTmpDir(self):
+        try:
+            tmpdir = tempfile.mkdtemp()
+        except:
+            tmpdir = ""
+        return tmpdir
+
+    def _writeMedia (self, tmpdir, id, media, ext):
+      destname = tmpdir + "/" + str(id) + "." + ext
+
+      try:
+        with open(destname, 'wb') as output_file:
+          output_file.write(media)
+      except:
+        destname = ""
+
+      return destname
+
+    def _filetype(self, header):
+        if (header[:4] == JPGHEADER) and (header[6:] != JPGIDENT):
+            return 'jpg'
+        elif (header == MA4HEADER):
+            return 'ma4'
+        else:
+            return 'bin'
+
     def printDBheader(self):
 
         if self.dbHeaderDict["pageSize"] == 1:
@@ -651,19 +694,15 @@ class SQLiteDBParser:
                 for key, value in self.dbSchema[dbtable]['schema']:
                     print("\t\t %s:\t%s" %(str(key),str(value)))
 
-    def printDBData(self, debug=None, verbose=None):
-        if debug is not None:
-            debug = True
-        if verbose is not None:
-            verbose = True
+    def printDBData(self):
 
         for ipage in self.dbPages:
             if ipage == 1 or self.dbPages[ipage]['pageType'] == "Overflow Page":
                 continue
 
-            self.printTable(number=ipage, verbose=verbose, debug=debug, fspace=True, unallocated=True, deleted=True)
+            self.printTable(number=ipage)
 
-    def printTable(self, name=None, number=None, debug=None, verbose=None, fspace=None, unallocated=None, deleted=None):
+    def printTable(self, name=None, number=None):
         page = None
         if name == None and number == None:
             return
@@ -694,14 +733,14 @@ class SQLiteDBParser:
                 rowdata += "';'".join(map(str,row))
                 rowdata += "'"
                 print(rowdata)
-        if fspace:
+        if self.opt['freespace']:
             for freespace in page["freespace"]:
-                if verbose == True:
+                if self.opt['verbose'] == True:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + freespace + "'")
                 else:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
-        if unallocated:
-            if verbose == True:
+        if self.opt['unallocated']:
+            if self.opt['verbose'] == True:
                 print(str(page["pageNr"]) + ";U;'';" + "'" + page["unallocated"] + "'")
             else:
                 data = self._remove_non_printable(page["unallocated"])
@@ -716,21 +755,21 @@ class SQLiteDBParser:
                         rowdata += "';'".join(map(str,row))
                         rowdata += "'"
                         print(rowdata)
-                if fspace and self.hasFreespace(self.dbPages[leafpage]) == True:
+                if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
                     for freespace in self.dbPages[leafpage]["freespace"]:
-                        if verbose == True:
+                        if self.opt['verbose'] == True:
                             print(str(leafpage) + ";F;'';" + "'" + str(freespace) + "'")
                         else:
                             print(str(leafpage) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
-                if unallocated and self.hasUnallocated(self.dbPages[leafpage]) == True:
-                    if verbose == True:
+                if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[leafpage]) == True:
+                    if self.opt['verbose'] == True:
                         print(str(leafpage) + ";U;'';" + "'" + self.dbPages[leafpage]["unallocated"] + "'")
                     else:
                         data = self._remove_non_printable(self.dbPages[leafpage]["unallocated"])
                         if data != "":
                             print(str(leafpage) + ";U;'';" + "'" + data + "'")
 
-        if deleted and self.hasDeleted(page) == True:
+        if self.opt['deleted'] and self.hasDeleted(page) == True:
             for deletedpage in page["deletedpages"]:
                 if self.hasCelldata(self.dbPages[deletedpage]) == True:
                     for row in self.dbPages[deletedpage]["celldata"]:
@@ -738,15 +777,15 @@ class SQLiteDBParser:
                         rowdata += "';'".join(map(str,row))
                         rowdata += "'"
                         print(rowdata)
-                if fspace and self.hasFreespace(self.dbPages[deletedpage]) == True:
+                if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
                     for freespace in self.dbPages[deletedpage]["freespace"]:
-                        if verbose == True:
+                        if self.opt['verbose'] == True:
                             print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
                         else:
                             print(str(deletedpage) + ";DF;'';" + "'" + self._remove_non_printable(freespace) + "'")
 
-                if unallocated and self.hasUnallocated(self.dbPages[deletedpage]) == True:
-                    if verbose == True:
+                if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[deletedpage]) == True:
+                    if self.opt['verbose'] == True:
                         print(str(deletedpage) + ";DU;'';" + "'" + self.dbPages[deletedpage]["unallocated"] + "'")
                     else:
                         data = self._remove_non_printable(self.dbPages[deletedpage]["unallocated"])
@@ -1299,6 +1338,8 @@ def main(argv):
             -l list all tables\n\
             -s print schema\n\
             -i print db info\n\
+            -b print binary to stdout\n\
+            -B print binary to file\n\
             -a print all\n\
             -F print freespace\n\
             -U print unallocated\n\
@@ -1315,6 +1356,8 @@ def main(argv):
     parser.add_option("-l", "--tables", action ="store_true", dest = "listtables", help = "Optional")
     parser.add_option("-s", "--schema", action ="store_true", dest = "printschema", help = "Optional")
     parser.add_option("-i", "--info", action ="store_true", dest = "printinfo", help = "Optional")
+    parser.add_option("-b", "--bin2out", action ="store_true", dest = "bin2out", help = "Optional")
+    parser.add_option("-B", "--bin2file", action ="store_true", dest = "bin2file", help = "Optional")
     parser.add_option("-a", "--all", action ="store_true", dest = "printall", help = "Optional")
 
     group = OptionGroup(parser, "Print table", "Print dedicated table. Lookup a table name or number with option -l")
@@ -1323,7 +1366,7 @@ def main(argv):
     group.add_option("-n", "--table number", dest = "tablenum", help = "Optional")
     group.add_option("-F", "--freespace", action ="store_true", dest = "freespace", help = "Optional")
     group.add_option("-U", "--unallocated", action ="store_true", dest = "unallocated", help = "Optional")
-    group.add_option("-D", "--printdeleted", action ="store_true", dest = "deleted", help = "Optional")
+    group.add_option("-D", "--deleted", action ="store_true", dest = "deleted", help = "Optional")
 
     parser.add_option_group(group)
 #    parser.add_option("-p", "--printtable", action ="store_true", dest = "printtable", help = "Optional")
@@ -1333,6 +1376,11 @@ def main(argv):
 
 
     (options,args)=parser.parse_args()
+
+    if options.printall:
+        options.freespace = True
+        options.deleted = True
+        options.unallocated = True
 
     if checkPythonVersion() != 3:
         print("SQLiteDBParser requires python version 3...")
@@ -1354,7 +1402,7 @@ def main(argv):
         print ("File not Found %s" %str(options.infile))
         sys.exit(0)
 
-    sqliteDB = SQLiteDBParser(options.infile)
+    sqliteDB = SQLiteDBParser(options)
 
     #exit if file is not a SQLite database
     if sqliteDB.isSqliteDB() == False:
@@ -1377,9 +1425,9 @@ def main(argv):
         if options.tablename == None and options.tablenum == None:
             return
         if options.tablename:
-            sqliteDB.printTable(name=options.tablename, debug=options.debug, fspace=options.freespace, unallocated=options.unallocated, deleted=options.deleted)
+            sqliteDB.printTable(name=options.tablename)
         if options.tablenum:
-            sqliteDB.printTable(number=options.tablenum, debug=options.debug, fspace=options.freespace, unallocated=options.unallocated, deleted=options.deleted)
+            sqliteDB.printTable(number=options.tablenum)
         pass
 if __name__ == '__main__':
     main(sys.argv[1:])
