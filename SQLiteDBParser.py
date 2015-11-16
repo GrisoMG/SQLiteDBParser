@@ -42,6 +42,11 @@ GPLNOTICE = '   Copyright (C) 2015 GrisoMG\n\
 JPGHEADER = b'\xff\xd8\xff\xe0'
 JPGIDENT =  b'JFIF\0'
 JPGHEADERLEN = 12
+
+EXIFHEADER = b'\xff\xd8\xff\xe1'
+EXIFIDENT = b'Exif\0'
+EXIFHEADERLEN = 12
+
 MA4HEADER = b'\x10\x00\x00\x00\x1c\x66\x74'
 MA4HEADERLEN = 7
 MOVHEADER = b'\x00\x00\x00\x1C\x66\x74\x79\x70\x6D\x70\x34\x32'
@@ -633,7 +638,7 @@ class SQLiteDBParser:
         return destname
 
     def _filetype(self, header):
-        if (header[:4] == JPGHEADER) and (header[6:] != JPGIDENT):
+        if ((header[:4] == JPGHEADER) and (header[6:] != JPGIDENT)) or ((header[:4] == EXIFHEADER) and (header[6:] != EXIFIDENT)):
             return 'jpg'
         elif (header[0:MA4HEADERLEN] == MA4HEADER):
             return 'ma4'
