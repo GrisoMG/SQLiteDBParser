@@ -18,7 +18,9 @@ Usage: SQLiteDBParser.py
             -l list all tables  
             -s print schema  
             -i print db info  
-            -a print all  
+            -a print all 
+            -b print binary data to stdout
+            -B print binary data to file
             -F print freespace  
             -U print unallocated  
             -D print deleted pages  
@@ -37,6 +39,8 @@ Usage: SQLiteDBParser.py
     -s, --schema             Optional
     -i, --info               Optional
     -a, --all                Optional
+    -b, --bin2out            Optional
+    -B, --bin2file           Optional
 
 
   Print table:  

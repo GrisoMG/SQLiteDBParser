@@ -39,11 +39,15 @@ GPLNOTICE = '   Copyright (C) 2015 GrisoMG\n\
     under certain conditions'
 
 
-JPGHEADER = '\xff\xd8\xff\xe0'
-JPGIDENT =  'JFIF\0'
-
-MA4HEADER = '\x10\x00\x00\x00\x1c\x66\x74'
-
+JPGHEADER = b'\xff\xd8\xff\xe0'
+JPGIDENT =  b'JFIF\0'
+JPGHEADERLEN = 12
+MA4HEADER = b'\x10\x00\x00\x00\x1c\x66\x74'
+MA4HEADERLEN = 7
+MOVHEADER = b'\x00\x00\x00\x1C\x66\x74\x79\x70\x6D\x70\x34\x32'
+MOVHEADERLEN = 12
+BPLISTHEADER = b'\x62\x70\x6C\x69\x73\x74'
+BPLISTHEADERLEN = 6
 
 SQLITE_SIGNATURE = b'SQLite format 3\x00'
 
@@ -108,6 +112,9 @@ class SQLiteDBParser:
         self.dbPages = []
         self.lPagesWithoutRoot = []
         self.overflowpages = []
+
+        if self.opt['bin2file']:
+            self.tmpdir = self._makeTmpDir()
 
         # 1. read db file, parse header, check if valid sqlite database, parse schema, get page offsets
         self._readDBFile()
@@ -236,6 +243,7 @@ class SQLiteDBParser:
         i = 0
         bindata = False
 
+        buf = buf.replace('\n','')
         try:
             if chr(buf[0]):
                 bindata = True
@@ -546,13 +554,19 @@ class SQLiteDBParser:
                 if l > 0 and r > l:
                     strcolumns = strcolumns[:l-1] + strcolumns[r+1:]
 
-                if strcolumns[0] == ' ':    # remove byte if first byte is space
-                    strcolumns = strcolumns[1:]
+#                if strcolumns[0] == ' ':    # remove byte if first byte is space
+#                    strcolumns = strcolumns[1:]
+                strcolumns = strcolumns.lstrip(' ')
+                strcolumns = strcolumns.rstrip(' ')
                 strcolumns = strcolumns.replace(' REFERENCES','')
                 for column in strcolumns.split(','):
+                    column = column.lstrip(' ')
+                    column = column.replace('"','')
+                    if column == '':
+                        continue
                     if column[0] == ' ':
                         column = column[1:]
-                    if str(column).startswith('PRIMARY'):
+                    if str(column).startswith('PRIMARY') or str(column).startswith('UNIQUE'):
                         continue
                     try:
                         column.index('UNIQUE (')
@@ -560,6 +574,8 @@ class SQLiteDBParser:
                     except ValueError:
                         pass
                     columninfo = []
+                    columnname = ""
+                    columntype = ""
                     if len(column.split(' ')) >= 2:
                         columnname = column.split(' ')[0]
                         columntype = column.split(' ')[1]
@@ -594,7 +610,6 @@ class SQLiteDBParser:
                 ret = ret + chr(ch)
         return ret.strip()
 
-
     def _makeTmpDir(self):
         try:
             tmpdir = tempfile.mkdtemp()
@@ -602,22 +617,28 @@ class SQLiteDBParser:
             tmpdir = ""
         return tmpdir
 
-    def _writeMedia (self, tmpdir, id, media, ext):
-      destname = tmpdir + "/" + str(id) + "." + ext
+    def _writeBinary (self,name, data):
 
-      try:
-        with open(destname, 'wb') as output_file:
-          output_file.write(media)
-      except:
-        destname = ""
+        try:
+            ext = self._filetype(data[0:12])
+            destname = self.tmpdir + "/" + str(name) + "." + ext
+            with open(destname, 'wb') as output_file:
+                output_file.write(data)
+            output_file.close()
+        except:
+            destname = ""
 
-      return destname
+        return destname
 
     def _filetype(self, header):
         if (header[:4] == JPGHEADER) and (header[6:] != JPGIDENT):
             return 'jpg'
-        elif (header == MA4HEADER):
+        elif (header[0:MA4HEADERLEN] == MA4HEADER):
             return 'ma4'
+        elif (header[0:MOVHEADERLEN] == MOVHEADER):
+            return 'mov'
+        elif (header[0:BPLISTHEADERLEN] == BPLISTHEADER):
+            return 'bplist'
         else:
             return 'bin'
 
@@ -704,6 +725,10 @@ class SQLiteDBParser:
 
     def printTable(self, name=None, number=None):
         page = None
+        schema = {}
+        tblname = "???"
+        colheader = "???"
+
         if name == None and number == None:
             return
         if name is not None:
@@ -719,6 +744,7 @@ class SQLiteDBParser:
         if self.isRootPage(page) == True:
             try:
                 tblname, colheader = page["schema"].popitem()
+                schema = self.dbSchema[tblname]['schema']
             except:
                 tblname = "???"
                 colheader = "???"
@@ -728,10 +754,26 @@ class SQLiteDBParser:
             print(hdr)
 
         if self.hasCelldata(page) == True:
+            rownum = 0
             for row in page["celldata"]:
-                rowdata = str(page["pageNr"]) + ";C;'"
-                rowdata += "';'".join(map(str,row))
-                rowdata += "'"
+                rownum += 1
+#                rowdata = str(page["pageNr"]) + ";C;'"
+#                rowdata += "';'".join(map(str,row))
+                rowdata = str(page["pageNr"]) + ";C;"
+                i=0
+                for cell in row:
+                    try:
+                        if (schema[i][1] == "BLOB"):
+                            if (self.opt['bin2out']):
+                                rowdata += ";'" + str(cell) + "'"
+                            if (self.opt['bin2file']):
+                                self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                        else:
+                            rowdata += ";'" + str(cell) + "'"
+                    except:
+                        rowdata += ";'" + str(cell) + "'"
+                    i+=1
+#                rowdata += "'"
                 print(rowdata)
         if self.opt['freespace']:
             for freespace in page["freespace"]:
@@ -750,10 +792,30 @@ class SQLiteDBParser:
         if self.hasLeafPages(page) == True:
             for leafpage in page["leafpages"]:
                 if self.hasCelldata(self.dbPages[leafpage]) == True:
+                    '''
                     for row in self.dbPages[leafpage]["celldata"]:
                         rowdata = str(leafpage) + ";C;'"
                         rowdata += "';'".join(map(str,row))
                         rowdata += "'"
+                        print(rowdata)
+                    '''
+                    rownum = 0
+                    for row in self.dbPages[leafpage]["celldata"]:
+                        rownum += 1
+                        rowdata = str(leafpage) + ";C;"
+                        i=0
+                        for cell in row:
+                            try:
+                                if (schema[i][1] == "BLOB"):
+                                    if (self.opt['bin2out']):
+                                        rowdata += ";'" + str(cell) + "'"
+                                    if (self.opt['bin2file']):
+                                        self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                else:
+                                    rowdata += ";'" + str(cell) + "'"
+                            except:
+                                rowdata += ";'" + str(cell) + "'"
+                            i+=1
                         print(rowdata)
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
                     for freespace in self.dbPages[leafpage]["freespace"]:
