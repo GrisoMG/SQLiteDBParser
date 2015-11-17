@@ -760,19 +760,20 @@ class SQLiteDBParser:
             hdr += ";".join(map(str,colheader))
             print(hdr)
 
+        #if the page has leafpages, the page cells contain only the pointer to the leafpages
         if self.hasCelldata(page) == True:
             rownum = 0
             for row in page["celldata"]:
                 rownum += 1
-#                rowdata = str(page["pageNr"]) + ";C;'"
-#                rowdata += "';'".join(map(str,row))
-                rowdata = str(page["pageNr"]) + ";C;"
+                rowdata = str(page["pageNr"]) + ";C"
                 i=0
                 for cell in row:
                     try:
                         if (schema[i][1] == "BLOB"):
                             if (self.opt['bin2out']):
                                 rowdata += ";'" + str(cell) + "'"
+                            else:
+                                rowdata += ";"
                             if (self.opt['bin2file']):
                                 self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
                         else:
@@ -799,23 +800,18 @@ class SQLiteDBParser:
         if self.hasLeafPages(page) == True:
             for leafpage in page["leafpages"]:
                 if self.hasCelldata(self.dbPages[leafpage]) == True:
-                    '''
-                    for row in self.dbPages[leafpage]["celldata"]:
-                        rowdata = str(leafpage) + ";C;'"
-                        rowdata += "';'".join(map(str,row))
-                        rowdata += "'"
-                        print(rowdata)
-                    '''
                     rownum = 0
                     for row in self.dbPages[leafpage]["celldata"]:
                         rownum += 1
-                        rowdata = str(leafpage) + ";C;"
+                        rowdata = str(leafpage) + ";C"
                         i=0
                         for cell in row:
                             try:
                                 if (schema[i][1] == "BLOB"):
                                     if (self.opt['bin2out']):
                                         rowdata += ";'" + str(cell) + "'"
+                                    else:
+                                        rowdata += ";"
                                     if (self.opt['bin2file']):
                                         self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
                                 else:
@@ -841,11 +837,27 @@ class SQLiteDBParser:
         if self.opt['deleted'] and self.hasDeleted(page) == True:
             for deletedpage in page["deletedpages"]:
                 if self.hasCelldata(self.dbPages[deletedpage]) == True:
+                    rownum = 0
                     for row in self.dbPages[deletedpage]["celldata"]:
-                        rowdata = str(deletedpage) + ";DC;'"
-                        rowdata += "';'".join(map(str,row))
-                        rowdata += "'"
+                        rownum += 1
+                        rowdata = str(deletedpage) + ";DC"
+                        i=0
+                        for cell in row:
+                            try:
+                                if (schema[i][1] == "BLOB"):
+                                    if (self.opt['bin2out']):
+                                        rowdata += ";'" + str(cell) + "'"
+                                    else:
+                                        rowdata += ";"
+                                    if (self.opt['bin2file']):
+                                        self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                else:
+                                    rowdata += ";'" + str(cell) + "'"
+                            except:
+                                rowdata += ";'" + str(cell) + "'"
+                            i+=1
                         print(rowdata)
+
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if self.opt['verbose'] == True:
