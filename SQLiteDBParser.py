@@ -652,20 +652,20 @@ class SQLiteDBParser:
     def printDBheader(self):
 
         if self.dbHeaderDict["pageSize"] == 1:
-            print("Page size in bytes:\t: 65536")
+            print("Page size in bytes:".ljust(35,' ') + "65536")
         else:
-            print("Page size in bytes:\t%s" %str(self.dbHeaderDict["pageSize"]))
-        print("write_version: %s" %str(self.dbHeaderDict["write_version"]))
-        print("read_version: %s" %str(self.dbHeaderDict["read_version"]))
-        print("unused_reservered_space: %s" %str(self.dbHeaderDict["unused_reserved_space"]))
-        print("maximum_embedded_payload_fraction: %s" %str(self.dbHeaderDict["maximum_embedded_payload_fraction"]))
-        print("minimum_embedded_payload_fraction: %s" %str(self.dbHeaderDict["minimum_embedded_payload_fraction"]))
-        print("leaf_payload_fraction: %s" %str(self.dbHeaderDict["leaf_payload_fraction"]))
-        print("file_change_counter: %s" %str(self.dbHeaderDict["file_change_counter"]))
-        print("in_header_database_size: %s" %str(self.dbHeaderDict["in_header_database_size"]))
-        print("first_freelist_trunk_page: %s" %str(self.dbHeaderDict["first_freelist_trunk_page"]))
-        print("total_num_freelist_pages: %s" %str(self.dbHeaderDict["total_num_freelist_pages"]))
-        print("schema_cookie: %s" %str(self.dbHeaderDict["schema_cookie"]))
+            print("Page size in bytes:".ljust(35,' ') + "%8s" %str(self.dbHeaderDict["pageSize"]))
+        print("write_version:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["write_version"]))
+        print("read_version:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["read_version"]))
+        print("unused_reservered_space:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["unused_reserved_space"]))
+        print("maximum_embedded_payload_fraction:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["maximum_embedded_payload_fraction"]))
+        print("minimum_embedded_payload_fraction:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["minimum_embedded_payload_fraction"]))
+        print("leaf_payload_fraction:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["leaf_payload_fraction"]))
+        print("file_change_counter:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["file_change_counter"]))
+        print("in_header_database_size:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["in_header_database_size"]))
+        print("first_freelist_trunk_page:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["first_freelist_trunk_page"]))
+        print("total_num_freelist_pages:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["total_num_freelist_pages"]))
+        print("schema_cookie:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["schema_cookie"]))
         if self.dbHeaderDict["schema_format_number"] == 1:
             sf = "SQLite v3.0.0"
         elif self.dbHeaderDict["schema_format_number"] == 2:
@@ -677,9 +677,9 @@ class SQLiteDBParser:
         else:
             sf = "Invalid Schema Format!"
 
-        print("schema_format_number: %s\t=> %s" %(str(self.dbHeaderDict["schema_format_number"]),sf))
-        print("default_page_cache_size: %s" %str(self.dbHeaderDict["default_page_cache_size"]))
-        print("largest_root_b_tree: %s" %str(self.dbHeaderDict["largest_root_b_tree"]))
+        print("schema_format_number:".ljust(35, ' ') + "%8s (%s)" %(str(self.dbHeaderDict["schema_format_number"]),sf))
+        print("default_page_cache_size:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["default_page_cache_size"]))
+        print("largest_root_b_tree:".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["largest_root_b_tree"]))
 
         if self.dbHeaderDict["database_text_encoding"] == 1:
             te = "UTF-8"
@@ -689,14 +689,14 @@ class SQLiteDBParser:
             te = "UTF-16be"
         else:
             te = "Invalid Text Encoding!"
-        print("database_text_encoding: %s\t=> %s" %(str(self.dbHeaderDict["database_text_encoding"]),te))
-        print("user_version: %s" %str(self.dbHeaderDict["user_version"]))
-        print("incremental_vacuum: %s" %str(self.dbHeaderDict["incremental_vacuum"]))
-        print("application_id: %s" %str(self.dbHeaderDict["application_id"]))
-        print("reserved: %s" %str(self.dbHeaderDict["reserved"]))
-        print("version_valid_for_number: %s" %str(self.dbHeaderDict["version_valid_for_number"]))
+        print("database_text_encoding:".ljust(35, ' ') + "%8s (%s)" %(str(self.dbHeaderDict["database_text_encoding"]),te))
+        print("user_version".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["user_version"]))
+        print("incremental_vacuum".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["incremental_vacuum"]))
+        print("application_id".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["application_id"]))
+        #print("reserved".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["reserved"]))
+        print("version_valid_for_number".ljust(35, ' ') + "%8s" %str(self.dbHeaderDict["version_valid_for_number"]))
 
-        print("sqlite_version_number: %s => %s" %(str(self.dbHeaderDict["sqlite_version_number"]),str(self.dbHeaderDict["sqlite_version_number"]).replace("00","0").replace("0",".")))
+        print("sqlite_version_number:".ljust(35, ' ') + "%8s (%s)" %(str(self.dbHeaderDict["sqlite_version_number"]),str(self.dbHeaderDict["sqlite_version_number"]).replace("00","0").replace("0",".")))
 
     def printPtrMap(self):
 
@@ -776,7 +776,7 @@ class SQLiteDBParser:
                             else:
                                 rowdata += ";"
                             if (self.opt['bin2file']):
-                                fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                fname = self._writeBinary(tblname+"_"+str(page["pageNr"])+"_"+str(rownum)+"_"+str(i), cell)
                                 if (fname != "") and not self.opt['bin2out']:
                                     rowdata += ";'" + fname + "'"
                         else:
@@ -816,7 +816,7 @@ class SQLiteDBParser:
                                     else:
                                         rowdata += ";"
                                     if (self.opt['bin2file']):
-                                        fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        fname = self._writeBinary(tblname+"_"+str(leafpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
                                             rowdata += ";'" + fname + "'"
                                 else:
@@ -855,7 +855,7 @@ class SQLiteDBParser:
                                     else:
                                         rowdata += ";"
                                     if (self.opt['bin2file']):
-                                        fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        fname = self._writeBinary(tblname+"_"+str(deletedpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
                                             rowdata += ";'" + fname + "'"
                                 else:
