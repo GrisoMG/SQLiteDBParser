@@ -768,6 +768,7 @@ class SQLiteDBParser:
                 rowdata = str(page["pageNr"]) + ";C"
                 i=0
                 for cell in row:
+                    fname = ''
                     try:
                         if (schema[i][1] == "BLOB"):
                             if (self.opt['bin2out']):
@@ -775,7 +776,9 @@ class SQLiteDBParser:
                             else:
                                 rowdata += ";"
                             if (self.opt['bin2file']):
-                                self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                if (fname != "") and not self.opt['bin2out']:
+                                    rowdata += ";'" + fname + "'"
                         else:
                             rowdata += ";'" + str(cell) + "'"
                     except:
@@ -813,7 +816,9 @@ class SQLiteDBParser:
                                     else:
                                         rowdata += ";"
                                     if (self.opt['bin2file']):
-                                        self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        if (fname != "") and not self.opt['bin2out']:
+                                            rowdata += ";'" + fname + "'"
                                 else:
                                     rowdata += ";'" + str(cell) + "'"
                             except:
@@ -850,7 +855,9 @@ class SQLiteDBParser:
                                     else:
                                         rowdata += ";"
                                     if (self.opt['bin2file']):
-                                        self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        fname = self._writeBinary(tblname+"_"+str(rownum)+"_"+str(i), cell)
+                                        if (fname != "") and not self.opt['bin2out']:
+                                            rowdata += ";'" + fname + "'"
                                 else:
                                     rowdata += ";'" + str(cell) + "'"
                             except:
@@ -988,7 +995,7 @@ class SQLiteDBParser:
             self.overflowpages.append(pagenum+1)
             offset = pagenum * self.dbHeaderDict['pageSize']
             next_pagenum = unpack('>I', self.data[offset:offset+4])[0] - 1
-            start = offset + 5
+            start = offset + 4
             end = offset + self.dbHeaderDict['pageSize'] - self.dbHeaderDict['unused_reserved_space']
             overlfowdata += self.data[start:end]
             pagenum = int(next_pagenum)
@@ -1003,17 +1010,18 @@ class SQLiteDBParser:
         """
         celldatalist = list()
         cellheader = None
-        dataoffset = None
-        payloadlen = None
+        dataoffset = 0
+        payloadlen = 0
         recordnum = None
-        overflowpageoffset = None
-        overflowpagenum = None
+        overflowpageoffset = 0
+        overflowpagenum = 0
+        payloadsizeincell = 0
         payload = b''
 
         if (cellformat == LEAF_TABLE_BTREE_PAGE):
-            cellheader,dataoffset,payloadlen,recordnum, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
-            end = + int(self._getPayloadSizeInCell(payloadlen))
-            payload = data[dataoffset:dataoffset + end]
+            cellheader,dataoffset,payloadlen,recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
+            #end = int(round(self._getPayloadSizeInCell(payloadlen)))
+            payload = data[dataoffset:dataoffset + payloadsizeincell]
             if (overflowpagenum > 0) and (overflowpagenum is not None):
                 payload += self._getoverflowdata(overflowpagenum)
             '''
@@ -1198,6 +1206,7 @@ class SQLiteDBParser:
         """
         headerlist = list()
         overflowpagenum = 0
+        payloadsizeincell = 0
         overflowpageoffset = offset
         # Payload length
         payloadlen,length = self._getVarIntOfs(data, offset)
@@ -1214,13 +1223,14 @@ class SQLiteDBParser:
         offset+=length
 
         # Overflow Page Number
-        overflowpageoffset += self._getPayloadSizeInCell(payloadlen)
+        payloadsizeincell = int(round(self._getPayloadSizeInCell(payloadlen)))
+        overflowpageoffset += payloadsizeincell
         overflowpageoffset = int(overflowpageoffset)
         if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
             overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
 
-        if 1 >= overflowpagenum >= self.dbHeaderDict['in_header_database_size']:
-            overflowpagenum = None
+        if (overflowpagenum <= 1) or (overflowpagenum >= self.dbHeaderDict['in_header_database_size']):
+            overflowpagenum = 0
 
         # Payload Fields
         while offset < (payloadheaderlenofs):
@@ -1255,7 +1265,7 @@ class SQLiteDBParser:
                 headerlist.append(("Reserved: %s" % str(fieldtype),0))
             offset+=length
 
-        return headerlist, offset, payloadlen, recordnum, overflowpageoffset, overflowpagenum
+        return headerlist, offset, payloadlen, recordnum, (payloadsizeincell-payloadheaderlen), overflowpageoffset, overflowpagenum
 
     def _parseLeafIndexCellHeader(self, data,offset):
 
