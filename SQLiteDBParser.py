@@ -49,10 +49,15 @@ EXIFHEADERLEN = 12
 
 MA4HEADER = b'\x10\x00\x00\x00\x1c\x66\x74'
 MA4HEADERLEN = 7
+
 MOVHEADER = b'\x00\x00\x00\x1C\x66\x74\x79\x70\x6D\x70\x34\x32'
 MOVHEADERLEN = 12
+
 BPLISTHEADER = b'\x62\x70\x6C\x69\x73\x74'
 BPLISTHEADERLEN = 6
+
+MP3HEADER = b'\x49\x44\x33' #with ID3v2 container
+MP3HEADERLEN = 3
 
 SQLITE_SIGNATURE = b'SQLite format 3\x00'
 
@@ -646,6 +651,8 @@ class SQLiteDBParser:
             return 'mov'
         elif (header[0:BPLISTHEADERLEN] == BPLISTHEADER):
             return 'bplist'
+        elif (header[0:MP3HEADERLEN] == MP3HEADER):
+            return 'mp3'
         else:
             return 'bin'
 
@@ -778,7 +785,7 @@ class SQLiteDBParser:
                             if (self.opt['bin2file']):
                                 fname = self._writeBinary(tblname+"_"+str(page["pageNr"])+"_"+str(rownum)+"_"+str(i), cell)
                                 if (fname != "") and not self.opt['bin2out']:
-                                    rowdata += ";'" + fname + "'"
+                                    rowdata += "'" + fname + "'"
                         else:
                             rowdata += ";'" + str(cell) + "'"
                     except:
@@ -818,7 +825,7 @@ class SQLiteDBParser:
                                     if (self.opt['bin2file']):
                                         fname = self._writeBinary(tblname+"_"+str(leafpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
-                                            rowdata += ";'" + fname + "'"
+                                            rowdata += "'" + fname + "'"
                                 else:
                                     rowdata += ";'" + str(cell) + "'"
                             except:
@@ -857,7 +864,7 @@ class SQLiteDBParser:
                                     if (self.opt['bin2file']):
                                         fname = self._writeBinary(tblname+"_"+str(deletedpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
-                                            rowdata += ";'" + fname + "'"
+                                            rowdata += "'" + fname + "'"
                                 else:
                                     rowdata += ";'" + str(cell) + "'"
                             except:
