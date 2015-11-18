@@ -8,15 +8,13 @@
 #
 # References:  n0fate: schema parser example https://github.com/n0fate/walitean
 #              Jim Hung: cellparser https://github.com/NotionalLabs/SQLiteZer
+#              Sho Nakatani (laysakura) handling of overflow pages https://github.com/laysakura/SQLiteDbVisualizer
 #
 # Limitations: sql command parser is not working 100% correctly
 #              matching of deleted pages to tables only based on column count
-#                  matching of column type and cell content is missing
+#
 #              output is not really nice
 #              pointer maps are not handled correctly
-#              blob data is not supported
-#              overflow pages are not supported
-#              index tables are not supported
 #
 # Requires:    Python 3
 #
