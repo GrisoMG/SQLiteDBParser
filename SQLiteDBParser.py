@@ -1190,7 +1190,8 @@ class SQLiteDBParser:
         payloadSize = payloadWholeSize
         usableSize = self.dbHeaderDict["pageSize"]
         maxLocal = usableSize - 35
-        minLocal = ((usableSize - 12) * 32 / 255) - 23
+        #not really sure if int or round
+        minLocal = int(((usableSize - 12) * 32 / 255)) - 23
         if payloadSize <= maxLocal:
             return payloadSize
         localSize = minLocal + ((payloadSize - minLocal) % (usableSize - 4))
