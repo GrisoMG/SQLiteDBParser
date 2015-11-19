@@ -1029,9 +1029,6 @@ class SQLiteDBParser:
             payload = data[dataoffset:dataoffset + payloadsizeincell]
             if (overflowpagenum > 0) and (overflowpagenum is not None):
                 payload += self._getoverflowdata(overflowpagenum)
-            '''
-            overflow test
-            '''
             data = payload
             dataoffset = 0
             for field in cellheader:
