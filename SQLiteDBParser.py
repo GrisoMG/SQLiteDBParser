@@ -814,20 +814,21 @@ class SQLiteDBParser:
                         rowdata = str(leafpage) + ";C"
                         i=0
                         for cell in row:
+                            rowdata += ";"
                             try:
                                 if (schema[i][1] == "BLOB"):
                                     if (self.opt['bin2out']):
-                                        rowdata += ";'" + str(cell) + "'"
-                                    else:
-                                        rowdata += ";"
+                                        rowdata += "'" + str(cell) + "'"
+                                    #else:
+                                    #    rowdata += ";"
                                     if (self.opt['bin2file']):
                                         fname = self._writeBinary(tblname+"_"+str(leafpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
                                             rowdata += "'" + fname + "'"
                                 else:
-                                    rowdata += ";'" + str(cell) + "'"
+                                    rowdata += "'" + str(cell) + "'"
                             except:
-                                rowdata += ";'" + str(cell) + "'"
+                                rowdata += "'" + str(cell) + "'"
                             i+=1
                         print(rowdata)
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
@@ -853,20 +854,21 @@ class SQLiteDBParser:
                         rowdata = str(deletedpage) + ";DC"
                         i=0
                         for cell in row:
+                            rowdata += ";"
                             try:
                                 if (schema[i][1] == "BLOB"):
                                     if (self.opt['bin2out']):
-                                        rowdata += ";'" + str(cell) + "'"
-                                    else:
-                                        rowdata += ";"
+                                        rowdata += "'" + str(cell) + "'"
+                                    #else:
+                                    #    rowdata += ";"
                                     if (self.opt['bin2file']):
                                         fname = self._writeBinary(tblname+"_"+str(deletedpage)+"_"+str(rownum)+"_"+str(i), cell)
                                         if (fname != "") and not self.opt['bin2out']:
                                             rowdata += "'" + fname + "'"
                                 else:
-                                    rowdata += ";'" + str(cell) + "'"
+                                    rowdata += "'" + str(cell) + "'"
                             except:
-                                rowdata += ";'" + str(cell) + "'"
+                                rowdata += "'" + str(cell) + "'"
                             i+=1
                         print(rowdata)
 
@@ -915,6 +917,9 @@ class SQLiteDBParser:
                 pass
 
             print("%4i %10s %45s %8s %23s %5s" %(i,str(pageNr), str(tbl_name), str(tbl_type), str(pageType), str(col_count)))
+
+    def printDBMap(self):
+        pass
 
     '''
     Funtions borrowed from SQLiteZer
@@ -1453,6 +1458,8 @@ def main(argv):
     parser.add_option("-b", "--bin2out", action ="store_true", dest = "bin2out", help = "Optional")
     parser.add_option("-B", "--bin2file", action ="store_true", dest = "bin2file", help = "Optional")
     parser.add_option("-a", "--all", action ="store_true", dest = "printall", help = "Optional")
+    parser.add_option("-m", "--map", action ="store_true", dest = "printmap", help = "Optional")
+
 
     group = OptionGroup(parser, "Print table", "Print dedicated table. Lookup a table name or number with option -l")
     group.add_option("-p", "--printtable", action ="store_true", dest = "printtable", help = "Optional")
@@ -1479,8 +1486,8 @@ def main(argv):
     if checkPythonVersion() != 3:
         print("SQLiteDBParser requires python version 3...")
         sys.exit(0)
-    else:
-        print("Python version ok...")
+#    else:
+#        print("Python version ok...")
 
     #if input file missing, exit
     if (options.infile == None):
@@ -1523,5 +1530,8 @@ def main(argv):
         if options.tablenum:
             sqliteDB.printTable(number=options.tablenum)
         pass
+    if options.printmap == True:
+        sqliteDB.printDBMap()
+
 if __name__ == '__main__':
     main(sys.argv[1:])
