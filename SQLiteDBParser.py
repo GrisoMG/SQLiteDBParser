@@ -352,12 +352,14 @@ class SQLiteDBParser:
         pageHeader = self._parsePageHeader(page, pageNr)
         dbpage["page"] = page
         dbpage["pageNr"] = pageNr
+        dbpage["offset"] = offset
         dbpage["pageHeader"] = pageHeader
         dbpage["isRootPage"] = False
 
         dbpage["celldata"] = list()
         dbpage["deleteddata"] = list()
 
+        dbpage["fs_celldata"] = list()
         if dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE:
             dbpage["pageType"] = "interior index b-tree"
             if pageNr == 2:
@@ -383,7 +385,7 @@ class SQLiteDBParser:
             dbpage["leafpages"] = self._readLeafPageList(dbpage, offset)
             dbpage["hasLeafPages"] = True
         dbpage["unallocated"] = self._readPageUnallocated(dbpage)
-        dbpage["freespace"] = self._readPageFreeSpace(dbpage)
+        dbpage["freespace"], dbpage["fs_celldata"] = self._readPageFreeSpace(dbpage)
 
 #            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
         if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
@@ -422,14 +424,17 @@ class SQLiteDBParser:
     def _readPageFreeSpace(self, dbpage):
         fbOffset = dbpage["pageHeader"]["fbOffset"]
         freeblocklist = list()
+        fs_celldata = list()
         while fbOffset > 0:
             try:
                 start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
                 if size > 0:
                     freeblock = dbpage["page"][fbOffset: fbOffset + size]
+                    fs_record = self._readPageCells(dbpage, start+dbpage["offset"])
                 else:
                     freeblock = ''
                 freeblocklist.append(freeblock)
+                fs_celldata.append(fs_record)
                 if (fbOffset != start) and (start > 0):
                     fbOffset = start
                 else:
@@ -439,7 +444,7 @@ class SQLiteDBParser:
                 '''
             except:
                 fbOffset = 0
-        return freeblocklist
+        return freeblocklist, fs_celldata
 
     def _readPageUnallocated(self, dbpage):
         if dbpage["pageNr"] == 1 and dbpage["pageHeader"]["pageByte"] != INTERIOR_TABLE_BTREE_PAGE:
@@ -793,10 +798,37 @@ class SQLiteDBParser:
                 print(rowdata)
         if self.opt['freespace']:
             for freespace in page["freespace"]:
+                '''
                 if self.opt['verbose'] == True:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + freespace + "'")
                 else:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                '''
+                for element in page["fs_celldata"]:
+                    for row in element:
+                        rownum += 1
+                        rowdata = str(page["pageNr"]) + ";FC"
+                        i=0
+                        for cell in row:
+                            rowdata += ";"
+                            try:
+                                if (schema[i][1] == "BLOB"):
+                                    if (self.opt['bin2out']):
+                                        rowdata += "'" + str(cell) + "'"
+                                    #else:
+                                    #    rowdata += ";"
+                                    if (self.opt['bin2file']):
+                                        fname = self._writeBinary(tblname+"_"+str(page["pageNr"])+"_"+str(rownum)+"_"+str(i), cell)
+                                        if (fname != "") and not self.opt['bin2out']:
+                                            rowdata += "'" + fname + "'"
+                                else:
+                                    rowdata += "'" + str(cell) + "'"
+                            except:
+                                rowdata += "'" + str(cell) + "'"
+                            i+=1
+                        print(rowdata)
+
+
         if self.opt['unallocated']:
             if self.opt['verbose'] == True:
                 print(str(page["pageNr"]) + ";U;'';" + "'" + page["unallocated"] + "'")
@@ -832,11 +864,38 @@ class SQLiteDBParser:
                             i+=1
                         print(rowdata)
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
+                    rownum = 0
+                    '''
                     for freespace in self.dbPages[leafpage]["freespace"]:
                         if self.opt['verbose'] == True:
                             print(str(leafpage) + ";F;'';" + "'" + str(freespace) + "'")
                         else:
                             print(str(leafpage) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                    '''
+                    for element in self.dbPages[leafpage]["fs_celldata"]:
+                        for row in element:
+                            rownum += 1
+                            rowdata = str(leafpage) + ";FC"
+                            i=0
+                            for cell in row:
+                                rowdata += ";"
+                                try:
+                                    if (schema[i][1] == "BLOB"):
+                                        if (self.opt['bin2out']):
+                                            rowdata += "'" + str(cell) + "'"
+                                        #else:
+                                        #    rowdata += ";"
+                                        if (self.opt['bin2file']):
+                                            fname = self._writeBinary(tblname+"_"+str(leafpage)+"_"+str(rownum)+"_"+str(i), cell)
+                                            if (fname != "") and not self.opt['bin2out']:
+                                                rowdata += "'" + fname + "'"
+                                    else:
+                                        rowdata += "'" + str(cell) + "'"
+                                except:
+                                    rowdata += "'" + str(cell) + "'"
+                                i+=1
+                            print(rowdata)
+
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[leafpage]) == True:
                     if self.opt['verbose'] == True:
                         print(str(leafpage) + ";U;'';" + "'" + self.dbPages[leafpage]["unallocated"] + "'")
@@ -873,11 +932,37 @@ class SQLiteDBParser:
                         print(rowdata)
 
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
+                    '''
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if self.opt['verbose'] == True:
                             print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
                         else:
                             print(str(deletedpage) + ";DF;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                    '''
+                    for element in self.dbPages[deletedpage]["fs_celldata"]:
+                        for row in element:
+                            rownum += 1
+                            rowdata = str(deletedpage) + ";DFC"
+                            i=0
+                            for cell in row:
+                                rowdata += ";"
+                                try:
+                                    if (schema[i][1] == "BLOB"):
+                                        if (self.opt['bin2out']):
+                                            rowdata += "'" + str(cell) + "'"
+                                        #else:
+                                        #    rowdata += ";"
+                                        if (self.opt['bin2file']):
+                                            fname = self._writeBinary(tblname+"_"+str(deletedpage)+"_"+str(rownum)+"_"+str(i), cell)
+                                            if (fname != "") and not self.opt['bin2out']:
+                                                rowdata += "'" + fname + "'"
+                                    else:
+                                        rowdata += "'" + str(cell) + "'"
+                                except:
+                                    rowdata += "'" + str(cell) + "'"
+                                i+=1
+                            print(rowdata)
+
 
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[deletedpage]) == True:
                     if self.opt['verbose'] == True:
@@ -1126,7 +1211,8 @@ class SQLiteDBParser:
 
                     dataoffset+=field[1]
                 else:
-                    print(field[0])
+                    pass
+                    #print(field[0])
         elif (cellformat == INTERIOR_TABLE_BTREE_PAGE):
             cellheader,dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(data, offset)
             celldatalist.append(pagechildnum)
