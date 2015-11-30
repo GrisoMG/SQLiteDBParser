@@ -798,12 +798,12 @@ class SQLiteDBParser:
                 print(rowdata)
         if self.opt['freespace']:
             for freespace in page["freespace"]:
-                '''
+
                 if self.opt['verbose'] == True:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + freespace + "'")
                 else:
                     print(str(page["pageNr"]) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
-                '''
+
                 for element in page["fs_celldata"]:
                     for row in element:
                         rownum += 1
@@ -865,13 +865,13 @@ class SQLiteDBParser:
                         print(rowdata)
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
                     rownum = 0
-                    '''
+
                     for freespace in self.dbPages[leafpage]["freespace"]:
                         if self.opt['verbose'] == True:
                             print(str(leafpage) + ";F;'';" + "'" + str(freespace) + "'")
                         else:
                             print(str(leafpage) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
-                    '''
+
                     for element in self.dbPages[leafpage]["fs_celldata"]:
                         for row in element:
                             rownum += 1
@@ -932,13 +932,13 @@ class SQLiteDBParser:
                         print(rowdata)
 
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
-                    '''
+
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if self.opt['verbose'] == True:
                             print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
                         else:
                             print(str(deletedpage) + ";DF;'';" + "'" + self._remove_non_printable(freespace) + "'")
-                    '''
+
                     for element in self.dbPages[deletedpage]["fs_celldata"]:
                         for row in element:
                             rownum += 1
@@ -1165,7 +1165,8 @@ class SQLiteDBParser:
 
                     dataoffset+=field[1]
                 else:
-                    print(field[0])
+                    pass
+                    #print(field[0])
         elif (cellformat == LEAF_INDEX_BTREE_PAGE):
             cellheader,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(data, offset)
             for field in cellheader:
