@@ -384,13 +384,14 @@ class SQLiteDBParser:
         if dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
             dbpage["leafpages"] = self._readLeafPageList(dbpage, offset)
             dbpage["hasLeafPages"] = True
-        dbpage["unallocated"] = self._readPageUnallocated(dbpage)
-        dbpage["freespace"], dbpage["fs_celldata"] = self._readPageFreeSpace(dbpage)
 
 #            if (dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) and (dbpage["pageHeader"]["cellQty"] > 0):
         if ((dbpage["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE) \
                     or (dbpage["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE) or (dbpage["pageHeader"]["pageByte"] == INTERIOR_INDEX_BTREE_PAGE)) and (dbpage["pageHeader"]["cellQty"] > 0):
             dbpage["celldata"] = self._readPageCells(dbpage, offset)
+
+        dbpage["unallocated"] = self._readPageUnallocated(dbpage)
+        dbpage["freespace"], dbpage["fs_celldata"] = self._readPageFreeSpace(dbpage)
 
         return dbpage
 
@@ -421,16 +422,18 @@ class SQLiteDBParser:
         leafpagelist.append(dbpage["pageHeader"]["rmpointer"])
         return leafpagelist
 
+
     def _readPageFreeSpace(self, dbpage):
         fbOffset = dbpage["pageHeader"]["fbOffset"]
         freeblocklist = list()
         fs_celldata = list()
+        fs_record = ''
         while fbOffset > 0:
             try:
                 start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
                 if size > 0:
                     freeblock = dbpage["page"][fbOffset: fbOffset + size]
-                    fs_record = self._readPageCells(dbpage, start+dbpage["offset"])
+                    fs_record = self._parseFreeSpaceCell(freeblock, start, dbpage["pageHeader"]["pageByte"])
                 else:
                     freeblock = ''
                 freeblocklist.append(freeblock)
@@ -445,6 +448,14 @@ class SQLiteDBParser:
             except:
                 fbOffset = 0
         return freeblocklist, fs_celldata
+
+    def _parseFreeSpaceCell(self, data, offset, cellformat):
+        '''
+        Work in progress
+        '''
+
+        fs_celldata = ()
+        return fs_celldata
 
     def _readPageUnallocated(self, dbpage):
         if dbpage["pageNr"] == 1 and dbpage["pageHeader"]["pageByte"] != INTERIOR_TABLE_BTREE_PAGE:
@@ -1096,7 +1107,7 @@ class SQLiteDBParser:
             pagenum = int(next_pagenum)
         return overlfowdata
 
-    def _parseCell(self, data,offset, cellformat):
+    def _parseCell(self, data, offset, cellformat):
         """
         Parse a B-Tree Leaf Page Cell, given it's starting absolute byte offset.
         Pass absolute starting byte offset for the cell header.
@@ -1111,10 +1122,11 @@ class SQLiteDBParser:
         overflowpageoffset = 0
         overflowpagenum = 0
         payloadsizeincell = 0
+        payloadheaderlen = 0
         payload = b''
 
         if (cellformat == LEAF_TABLE_BTREE_PAGE):
-            cellheader,dataoffset,payloadlen,recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
+            cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
             #end = int(round(self._getPayloadSizeInCell(payloadlen)))
             payload = data[dataoffset:dataoffset + payloadsizeincell]
             if (overflowpagenum > 0) and (overflowpagenum is not None):
@@ -1360,7 +1372,7 @@ class SQLiteDBParser:
                 headerlist.append(("Reserved: %s" % str(fieldtype),0))
             offset+=length
 
-        return headerlist, offset, payloadlen, recordnum, (payloadsizeincell-payloadheaderlen), overflowpageoffset, overflowpagenum
+        return headerlist, payloadheaderlen, offset, payloadlen, recordnum, (payloadsizeincell-payloadheaderlen), overflowpageoffset, overflowpagenum
 
     def _parseLeafIndexCellHeader(self, data,offset):
 
