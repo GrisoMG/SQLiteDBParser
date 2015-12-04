@@ -403,7 +403,7 @@ class SQLiteDBParser:
             end = cp + 2
             cellp = unpack('>H', dbpage["cellPointer"][start:end])[0]
             cellstart = offset + cellp
-            celldata = self._parseCell(self.data, cellstart, dbpage["pageHeader"]["pageByte"])
+            celldata, payloadlen = self._parseCell(self.data, cellstart, dbpage["pageHeader"]["pageByte"])
             celldatalist.append(celldata)
 
         return celldatalist
@@ -428,12 +428,13 @@ class SQLiteDBParser:
         freeblocklist = list()
         fs_celldata = list()
         fs_record = ''
+        rs_offset = 2
         while fbOffset > 0:
             try:
                 start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
                 if size > 0:
                     freeblock = dbpage["page"][fbOffset: fbOffset + size]
-                    fs_record = self._parseFreeSpaceCell(freeblock, start, dbpage["pageHeader"]["pageByte"])
+                    fs_record = self._parseFreeSpaceCell(freeblock, 6, dbpage["pageHeader"]["pageByte"])
                 else:
                     freeblock = ''
                 freeblocklist.append(freeblock)
@@ -455,6 +456,7 @@ class SQLiteDBParser:
         '''
 
         fs_celldata = ()
+        #fs_record, payloadlen = self._parseCell(data, offset, cellformat)
         return fs_celldata
 
     def _readPageUnallocated(self, dbpage):
@@ -1180,7 +1182,7 @@ class SQLiteDBParser:
                     pass
                     #print(field[0])
         elif (cellformat == LEAF_INDEX_BTREE_PAGE):
-            cellheader,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(data, offset)
+            cellheader,payloadheaderlen,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(data, offset)
             for field in cellheader:
                 dataoffset = int(dataoffset)
                 if field[0] == "NULL":
@@ -1227,11 +1229,11 @@ class SQLiteDBParser:
                     pass
                     #print(field[0])
         elif (cellformat == INTERIOR_TABLE_BTREE_PAGE):
-            cellheader,dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(data, offset)
+            cellheader, dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(data, offset)
             celldatalist.append(pagechildnum)
             celldatalist.append(recordnum)
         elif (cellformat == INTERIOR_INDEX_BTREE_PAGE):
-            cellheader,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(data, offset)
+            cellheader,payloadheaderlen, dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(data, offset)
             '''
             for field in cellheader:
                 dataoffset = int(dataoffset)
@@ -1281,7 +1283,7 @@ class SQLiteDBParser:
         else:
             pass
 
-        return celldatalist
+        return celldatalist, payloadlen
 
     def _getPayloadSizeInCell(self, payloadWholeSize):
         """
@@ -1429,7 +1431,7 @@ class SQLiteDBParser:
                 headerlist.append(("Reserved: %s" % str(fieldtype),0))
             offset+=length
 
-        return headerlist, offset, payloadlen, overflowpageoffset, overflowpagenum
+        return headerlist, payloadheaderlen, offset, payloadlen, overflowpageoffset, overflowpagenum
 
     def _parseInteriorTableCellHeader(self, data,offset):
         """
@@ -1510,7 +1512,7 @@ class SQLiteDBParser:
                 headerlist.append(("Reserved: %s" % str(fieldtype),0))
             offset+=length
 
-        return headerlist, offset, payloadlen, overflowpageoffset, overflowpagenum
+        return headerlist, payloadheaderlen, offset, payloadlen, overflowpageoffset, overflowpagenum
 
     '''
     End of SQLiteZer functions
