@@ -422,23 +422,23 @@ class SQLiteDBParser:
         leafpagelist.append(dbpage["pageHeader"]["rmpointer"])
         return leafpagelist
 
-
     def _readPageFreeSpace(self, dbpage):
         fbOffset = dbpage["pageHeader"]["fbOffset"]
         freeblocklist = list()
+        fs_data = list()
         fs_celldata = list()
-        fs_record = ''
+        #fs_record = ''
         rs_offset = 2
         while fbOffset > 0:
             try:
                 start, size = unpack('>hh', dbpage["page"][fbOffset: fbOffset + 4])
                 if size > 0:
                     freeblock = dbpage["page"][fbOffset: fbOffset + size]
-                    fs_record = self._parseFreeSpaceCell(freeblock, 6, dbpage["pageHeader"]["pageByte"])
+                    fs_data, payloadlen  = self._parseFreeSpaceCell(freeblock, 4, dbpage["pageHeader"]["pageByte"])
                 else:
                     freeblock = ''
                 freeblocklist.append(freeblock)
-                fs_celldata.append(fs_record)
+                fs_celldata.append(fs_data)
                 if (fbOffset != start) and (start > 0):
                     fbOffset = start
                 else:
@@ -453,11 +453,65 @@ class SQLiteDBParser:
     def _parseFreeSpaceCell(self, data, offset, cellformat):
         '''
         Work in progress
+        :rtype: list
         '''
 
-        fs_celldata = ()
+        fs_celldata = list()
         #fs_record, payloadlen = self._parseCell(data, offset, cellformat)
-        return fs_celldata
+        cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset, freespace=True)
+        payload = data[dataoffset:]
+        if (overflowpagenum > 0) and (overflowpagenum is not None):
+            payload += self._getoverflowdata(overflowpagenum)
+        data = payload
+        dataoffset = 0
+        for field in cellheader:
+            dataoffset = int(dataoffset)
+            if field[0] == "NULL":
+                fs_celldata.append(recordnum)
+            elif field[0] == "ST_INT8":
+                fs_celldata.append(ord(unpack(">c",data[dataoffset:dataoffset+1])[0]))
+                dataoffset+=field[1]
+            elif field[0] == "ST_INT16":
+                fs_celldata.append(unpack(">h",data[dataoffset:dataoffset+2])[0])
+                dataoffset+=field[1]
+            elif field[0] == "ST_INT24":
+                fs_celldata.append("-")
+                dataoffset+=field[1]
+            elif field[0] == "ST_INT32":
+                fs_celldata.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
+                dataoffset+=field[1]
+            elif field[0] == "ST_INT48":
+                fs_celldata.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                dataoffset+=field[1]
+            elif field[0] == "ST_INT64":
+                fs_celldata.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
+                dataoffset+=8
+            elif field[0] == "ST_FLOAT":
+                fs_celldata.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
+                dataoffset+=8
+            elif field[0] == "ST_C0":
+                fs_celldata.append("-")
+            elif field[0] == "ST_C1":
+                fs_celldata.append("-")
+            elif field[0] == "ST_BLOB":
+                cell = data[dataoffset:dataoffset+int(field[1])]
+                fs_celldata.append(cell)
+                dataoffset+=field[1]
+            elif field[0] == "ST_TEXT":
+                try:
+                    fs_celldata.append(data[dataoffset:dataoffset+int(field[1])].decode('UTF-8'))
+                except:
+                    try:
+                        fs_celldata.append(str(data[dataoffset:dataoffset+int(field[1])]))
+                    except:
+                        pass
+
+                dataoffset+=field[1]
+            else:
+                pass
+                #print(field[0])
+
+        return fs_celldata, payloadlen
 
     def _readPageUnallocated(self, dbpage):
         if dbpage["pageNr"] == 1 and dbpage["pageHeader"]["pageByte"] != INTERIOR_TABLE_BTREE_PAGE:
@@ -811,35 +865,34 @@ class SQLiteDBParser:
                 print(rowdata)
         if self.opt['freespace']:
             for freespace in page["freespace"]:
-
-                if self.opt['verbose'] == True:
-                    print(str(page["pageNr"]) + ";F;'';" + "'" + freespace + "'")
-                else:
-                    print(str(page["pageNr"]) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                if self.opt['debug'] == True:
+                    if self.opt['verbose'] == True:
+                        print(str(page["pageNr"]) + ";F;'';" + "'" + freespace + "'")
+                    else:
+                        print(str(page["pageNr"]) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
 
                 for element in page["fs_celldata"]:
-                    for row in element:
-                        rownum += 1
-                        rowdata = str(page["pageNr"]) + ";FC"
-                        i=0
-                        for cell in row:
-                            rowdata += ";"
-                            try:
-                                if (schema[i][1] == "BLOB"):
-                                    if (self.opt['bin2out']):
-                                        rowdata += "'" + str(cell) + "'"
-                                    #else:
-                                    #    rowdata += ";"
-                                    if (self.opt['bin2file']):
-                                        fname = self._writeBinary(tblname+"_"+str(page["pageNr"])+"_"+str(rownum)+"_"+str(i), cell)
-                                        if (fname != "") and not self.opt['bin2out']:
-                                            rowdata += "'" + fname + "'"
-                                else:
+                    rownum += 1
+                    rowdata = str(page["pageNr"]) + ";FC"
+                    i=0
+                    for cell in row:
+                        rowdata += ";"
+                        try:
+                            if (schema[i][1] == "BLOB"):
+                                if (self.opt['bin2out']):
                                     rowdata += "'" + str(cell) + "'"
-                            except:
+                                #else:
+                                #    rowdata += ";"
+                                if (self.opt['bin2file']):
+                                    fname = self._writeBinary(tblname+"_"+str(page["pageNr"])+"_"+str(rownum)+"_"+str(i), cell)
+                                    if (fname != "") and not self.opt['bin2out']:
+                                        rowdata += "'" + fname + "'"
+                            else:
                                 rowdata += "'" + str(cell) + "'"
-                            i+=1
-                        print(rowdata)
+                        except:
+                            rowdata += "'" + str(cell) + "'"
+                        i+=1
+                    print(rowdata)
 
 
         if self.opt['unallocated']:
@@ -880,17 +933,17 @@ class SQLiteDBParser:
                     rownum = 0
 
                     for freespace in self.dbPages[leafpage]["freespace"]:
-                        if self.opt['verbose'] == True:
-                            print(str(leafpage) + ";F;'';" + "'" + str(freespace) + "'")
-                        else:
-                            print(str(leafpage) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                        if self.opt['debug'] == True:
+                            if self.opt['verbose'] == True:
+                                print(str(leafpage) + ";F;'';" + "'" + str(freespace) + "'")
+                            else:
+                                print(str(leafpage) + ";F;'';" + "'" + self._remove_non_printable(freespace) + "'")
 
-                    for element in self.dbPages[leafpage]["fs_celldata"]:
-                        for row in element:
+                        for element in self.dbPages[leafpage]["fs_celldata"]:
                             rownum += 1
                             rowdata = str(leafpage) + ";FC"
                             i=0
-                            for cell in row:
+                            for cell in element:
                                 rowdata += ";"
                                 try:
                                     if (schema[i][1] == "BLOB"):
@@ -947,17 +1000,17 @@ class SQLiteDBParser:
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
 
                     for freespace in self.dbPages[deletedpage]["freespace"]:
-                        if self.opt['verbose'] == True:
-                            print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
-                        else:
-                            print(str(deletedpage) + ";DF;'';" + "'" + self._remove_non_printable(freespace) + "'")
+                        if self.opt['debug'] == True:
+                            if self.opt['verbose'] == True:
+                                print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
+                            else:
+                                print(str(deletedpage) + ";DF;'';" + "'" + self._remove_non_printable(freespace) + "'")
 
-                    for element in self.dbPages[deletedpage]["fs_celldata"]:
-                        for row in element:
+                        for element in self.dbPages[deletedpage]["fs_celldata"]:
                             rownum += 1
                             rowdata = str(deletedpage) + ";DFC"
                             i=0
-                            for cell in row:
+                            for cell in element:
                                 rowdata += ";"
                                 try:
                                     if (schema[i][1] == "BLOB"):
@@ -1128,7 +1181,7 @@ class SQLiteDBParser:
         payload = b''
 
         if (cellformat == LEAF_TABLE_BTREE_PAGE):
-            cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset)
+            cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(data, offset, freespace=False)
             #end = int(round(self._getPayloadSizeInCell(payloadlen)))
             payload = data[dataoffset:dataoffset + payloadsizeincell]
             if (overflowpagenum > 0) and (overflowpagenum is not None):
@@ -1304,7 +1357,7 @@ class SQLiteDBParser:
         sizeInThisPage = minLocal if localSize > maxLocal else localSize
         return sizeInThisPage
 
-    def _parseLeafTableCellHeader(self, data, offset):
+    def _parseLeafTableCellHeader(self, data, offset, freespace=None):
         """
         Parse a B-Tree Leaf Page Cell Header, given it's starting absolute byte
         offset.
@@ -1313,18 +1366,22 @@ class SQLiteDBParser:
         [(String type,int length),...], and the starting offset of the payload
         fields.
         """
+
         headerlist = list()
         overflowpagenum = 0
         payloadsizeincell = 0
         overflowpageoffset = offset
-        # Payload length
-        payloadlen,length = self._getVarIntOfs(data, offset)
-        offset+=length
-        overflowpageoffset+=length
-        # Record Number
-        recordnum,length = self._getVarIntOfs(data, offset)
-        offset+=length
-        overflowpageoffset+=length
+        recordnum = 0
+        payloadlen = 0
+        if freespace is False:
+            # Payload length
+            payloadlen,length = self._getVarIntOfs(data, offset)
+            offset+=length
+            overflowpageoffset+=length
+            # Record Number
+            recordnum,length = self._getVarIntOfs(data, offset)
+            offset+=length
+            overflowpageoffset+=length
 
         # Payload Header Length
         payloadheaderlen,length = self._getVarIntOfs(data, offset)
@@ -1332,14 +1389,15 @@ class SQLiteDBParser:
         offset+=length
 
         # Overflow Page Number
-        payloadsizeincell = int(round(self._getPayloadSizeInCell(payloadlen)))
-        overflowpageoffset += payloadsizeincell
-        overflowpageoffset = int(overflowpageoffset)
-        if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
-            overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
+        if freespace is False:
+            payloadsizeincell = int(round(self._getPayloadSizeInCell(payloadlen)))
+            overflowpageoffset += payloadsizeincell
+            overflowpageoffset = int(overflowpageoffset)
+            if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
+                overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
 
-        if (overflowpagenum <= 1) or (overflowpagenum >= self.dbHeaderDict['in_header_database_size']):
-            overflowpagenum = 0
+            if (overflowpagenum <= 1) or (overflowpagenum >= self.dbHeaderDict['in_header_database_size']):
+                overflowpagenum = 0
 
         # Payload Fields
         while offset < (payloadheaderlenofs):
