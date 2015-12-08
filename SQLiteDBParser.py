@@ -219,8 +219,11 @@ class SQLiteDBParser:
             try:
                 self.dbPages[rootNr]["deletedpages"].append(pageNr)
             except:
-                self.dbPages[rootNr]["deletedpages"] = list()
-                self.dbPages[rootNr]["deletedpages"].append(pageNr)
+                try:
+                    self.dbPages[rootNr]["deletedpages"] = list()
+                    self.dbPages[rootNr]["deletedpages"].append(pageNr)
+                except:
+                    pass
 
     def _findMatchingSchema(self, celldata):
         #compare number of columns with schema of tables
@@ -481,8 +484,10 @@ class SQLiteDBParser:
                 fs_celldata.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
                 dataoffset+=field[1]
             elif field[0] == "ST_INT48":
-                fs_celldata.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                fs_celldata.append(unpack(">i",data[dataoffset:dataoffset+6])[0])
                 dataoffset+=field[1]
+                #fs_celldata.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                #dataoffset+=field[1]
             elif field[0] == "ST_INT64":
                 fs_celldata.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
                 dataoffset+=8
@@ -1001,6 +1006,8 @@ class SQLiteDBParser:
 
                     for freespace in self.dbPages[deletedpage]["freespace"]:
                         if self.opt['debug'] == True:
+
+
                             if self.opt['verbose'] == True:
                                 print(str(deletedpage) + ";DF;'';" + "'" + freespace + "'")
                             else:
@@ -1056,7 +1063,7 @@ class SQLiteDBParser:
             if tbl_type == "table":
                 tbl_type = "TABLE"
             pageNr = self.dbSchema[dbtable]['rootpage']
-            if pageNr == "-" or pageNr is None:
+            if pageNr == "-" or pageNr is None or pageNr == '0':
                 pageNr = ""
                 pageType = ""
             else:
@@ -1205,8 +1212,10 @@ class SQLiteDBParser:
                     celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
                     dataoffset+=field[1]
                 elif field[0] == "ST_INT48":
-                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    celldatalist.append(self._unpack48(data[dataoffset:dataoffset + 6]))
                     dataoffset+=field[1]
+                    #celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    #dataoffset+=field[1]
                 elif field[0] == "ST_INT64":
                     celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
                     dataoffset+=8
@@ -1214,9 +1223,9 @@ class SQLiteDBParser:
                     celldatalist.append(unpack(">d",data[dataoffset:dataoffset+8])[0])
                     dataoffset+=8
                 elif field[0] == "ST_C0":
-                    celldatalist.append("-")
+                    celldatalist.append("0")
                 elif field[0] == "ST_C1":
-                    celldatalist.append("-")
+                    celldatalist.append("1")
                 elif field[0] == "ST_BLOB":
                     cell = data[dataoffset:dataoffset+int(field[1])]
                     celldatalist.append(cell)
@@ -1253,8 +1262,10 @@ class SQLiteDBParser:
                     celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
                     dataoffset+=field[1]
                 elif field[0] == "ST_INT48":
-                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    celldatalist.append(self._unpack48(data[dataoffset:dataoffset + 6]))
                     dataoffset+=field[1]
+                    #celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    #dataoffset+=field[1]
                 elif field[0] == "ST_INT64":
                     celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
                     dataoffset+=8
@@ -1305,7 +1316,7 @@ class SQLiteDBParser:
                     celldatalist.append(unpack(">i",data[dataoffset:dataoffset+4])[0])
                     dataoffset+=field[1]
                 elif field[0] == "ST_INT48":
-                    celldatalist.append("ST_INT48 - NOT IMPLEMENTED!") # NOT IMPLEMENTED YET!
+                    celldatalist.append(self.unpack48(data[dataoffset:dataoffset+6]))
                     dataoffset+=field[1]
                 elif field[0] == "ST_INT64":
                     celldatalist.append(unpack(">q",data[dataoffset:dataoffset+8])[0])
@@ -1373,6 +1384,7 @@ class SQLiteDBParser:
         overflowpageoffset = offset
         recordnum = 0
         payloadlen = 0
+        length = 0
         if freespace is False:
             # Payload length
             payloadlen,length = self._getVarIntOfs(data, offset)
@@ -1575,6 +1587,10 @@ class SQLiteDBParser:
     '''
     End of SQLiteZer functions
     '''
+
+    def _unpack48(self, x):
+        return int.from_bytes(x, byteorder='big')
+
 
 def checkPythonVersion():
 #    print(__import__("sys").version)
