@@ -780,6 +780,20 @@ class SQLiteDBParser:
 
         print("sqlite_version_number:".ljust(35, ' ') + "%8s (%s)" %(str(self.dbHeaderDict["sqlite_version_number"]),str(self.dbHeaderDict["sqlite_version_number"]).replace("00","0").replace("0",".")))
 
+        if self.opt['debug']:
+            print('\n##################################################################################\n')
+            #print("%4i %10s %45s %8s %23s %5s" %(i,str(pageNr), str(tbl_name), str(tbl_type), str(pageType), str(col_count)))
+            for page in self.dbPages:
+                print("Page Nr: %3s\tPage offset: %8s\tPage Type: %20s" %(str(self.dbPages[page]['pageNr']), str(self.dbPages[page]['offset']), str(self.dbPages[page]['pageType'])))
+                if self.dbPages[page]['isRootPage'] == True:
+                    print("Is Root Page: %5s" %(self.dbPages[page]['isRootPage']))
+                if self.hasLeafPages(self.dbPages[page]) == True:
+                    print("Leaf pages: %s" %(self.dbPages[page]['leafpages']))
+
+                if self.hasDeleted(self.dbPages[page]) == True:
+                    print("Deleted pages: %s" %(self.dbPages[page]['deletedpages']))
+                print('\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n')
+
     def printPtrMap(self):
 
         if self.ptrMap.__len__() > 0:
