@@ -26,7 +26,7 @@ __author__ = 'grisomg'
 
 from struct import unpack
 from optparse import OptionParser, OptionGroup
-import sys, tempfile, operator
+import sys, tempfile, operator, string
 
 VERSION = '0.9'
 BUILD = '20151112'
@@ -355,7 +355,7 @@ class SQLiteDBParser:
         pageHeader = self._parsePageHeader(page, pageNr)
         dbpage["page"] = page
         dbpage["pageNr"] = pageNr
-        dbpage["offset"] = offset
+        dbpage["pageOffset"] = offset
         dbpage["pageHeader"] = pageHeader
         dbpage["isRootPage"] = False
 
@@ -784,9 +784,66 @@ class SQLiteDBParser:
             print('\n##################################################################################\n')
             #print("%4i %10s %45s %8s %23s %5s" %(i,str(pageNr), str(tbl_name), str(tbl_type), str(pageType), str(col_count)))
             for page in self.dbPages:
-                print("Page Nr: %3s\tPage offset: %8s\tPage Type: %20s" %(str(self.dbPages[page]['pageNr']), str(self.dbPages[page]['offset']), str(self.dbPages[page]['pageType'])))
+                print("Page Nr: %3s\tPage offset: %8s\tPage Type: %20s" %(str(self.dbPages[page]['pageNr']), str(self.dbPages[page]['pageOffset']), str(self.dbPages[page]['pageType'])))
                 if self.dbPages[page]['isRootPage'] == True:
                     print("Is Root Page: %5s" %(self.dbPages[page]['isRootPage']))
+                if page == 1:
+                    phOffset = 100
+                else:
+                    phOffset = 0
+                if self.dbPages[page]["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE:
+                    phlen = 12
+                else:
+                    phlen = 8
+
+                print("Page header\tOffset: %4s\tLen: %4s" %(str(phOffset), str(phlen)))
+
+                print("\t{0:25s} {1:>5s}".format("Flag:", str(self.dbPages[page]["pageHeader"]["pageByte"])))
+                print("\t{0:25s} {1:>5s}".format("First free block:", str(self.dbPages[page]["pageHeader"]["fbOffset"])))
+                print("\t{0:25s} {1:>5s}".format("No of cells:", str(self.dbPages[page]["pageHeader"]["cellQty"])))
+                print("\t{0:25s} {1:>5s}".format("First byte of content:", str(self.dbPages[page]["pageHeader"]["cellOffset"])))
+                print("\t{0:25s} {1:>5s}".format("Fragmented byte count:", str(self.dbPages[page]["pageHeader"]["freebytes"])))
+                if self.dbPages[page]["pageHeader"]["rmpointer"] == None:
+                    rmp = ""
+                else:
+                    rmp = self.dbPages[page]["pageHeader"]["rmpointer"]
+                print("\t{0:25s} {1:>5s}".format("Right most pointer:", str(rmp)))
+
+
+                print("\n\t{0:23s} {1:>5s}".format("Cell pointer array:", "")) #str(self.dbPages[page]["pageHeader"]["cellQty"])))
+
+                for cp in range(0,(self.dbPages[page]["pageHeader"]["cellQty"]*2),2):
+                    start = cp
+                    end = cp + 2
+                    cellp = unpack('>H', self.dbPages[page]["cellPointer"][start:end])[0]
+                    cellstart = self.dbPages[page]['pageOffset'] + cellp
+                    print("\t\t{0:25s} {1:>5s}".format("Cell pointer:", str(cellp)))
+
+                    if (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
+                        cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(self.data, cellstart, freespace=False)
+                        print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
+                        print("\t\t\t{0:15s} {1:>5s}".format("Row ID:", str(recordnum)))
+                        print("\t\t\tPayload")
+                        print("\t\t\t\t{0:22s} {1:>5s}".format("Payload header len:", str(payloadheaderlen)))
+                        print("\t\t\t\t{0:22s} {1:>5s}".format("Data offset:", str(dataoffset)))
+                        print("\t\t\t\t{0:22s} {1:>5s}".format("Overflow page offset:", str(overflowpageoffset)))
+                        print("\t\t\t\t{0:22s} {1:>5s}".format("Overflow page num:", str(overflowpagenum)))
+                    elif (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE):
+                        cellheader,payloadheaderlen,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(self.data, self.dbPages[page]['pageOffset'])
+                        print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
+                        print("\t\t\tPayload")
+                        print("\t\t\t\t{0:20s} {1:>5s}".format("Payload header len:", str(payloadheaderlen)))
+                        print("\t\t\t\t{0:20s} {1:>5s}".format("Data offset:", str(dataoffset)))
+                        print("\t\t\t\t{0:20s} {1:>5s}".format("Overflow page offset:", str(overflowpageoffset)))
+                        print("\t\t\t\t{0:20s} {1:>5s}".format("Overflow page num:", str(overflowpagenum)))
+                    elif (self.dbPages[page]["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE):
+                        cellheader, dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(self.data,cellstart)
+                        print("\t\t\t{0:15s} {1:>5s}".format("Left child:", str(pagechildnum)))
+                        print("\t\t\t{0:15s} {1:>5s}".format("Row ID:", str(recordnum)))
+
+
+
+
                 if self.hasLeafPages(self.dbPages[page]) == True:
                     print("Leaf pages: %s" %(self.dbPages[page]['leafpages']))
 
