@@ -26,7 +26,7 @@ __author__ = 'grisomg'
 
 from struct import unpack
 from optparse import OptionParser, OptionGroup
-import sys, tempfile, operator, string
+import sys, tempfile, hashlib
 
 VERSION = '0.9'
 BUILD = '20151112'
@@ -912,6 +912,7 @@ class SQLiteDBParser:
             print("PageNr: %s\tTable name: %s" %(str(page["pageNr"]),str(tblname)))
             hdr = "Page;Type;"
             hdr += ";".join(map(str,colheader))
+            hdr += ";MD5 hash"
             print(hdr)
 
         #if the page has leafpages, the page cells contain only the pointer to the leafpages
@@ -938,8 +939,10 @@ class SQLiteDBParser:
                     except:
                         rowdata += ";'" + str(cell) + "'"
                     i+=1
-#                rowdata += "'"
-                print(rowdata)
+                md5 = hashlib.md5()
+                rd = ''.join(str(v) for v in row)
+                md5.update(rd.encode('utf-8'))
+                print(rowdata + ";" +str(md5.hexdigest()))
         if self.opt['freespace']:
             for freespace in page["freespace"]:
                 if self.opt['debug'] == True:
@@ -969,9 +972,10 @@ class SQLiteDBParser:
                         except:
                             rowdata += "'" + str(cell) + "'"
                         i+=1
-                    print(rowdata)
-
-
+                    md5 = hashlib.md5()
+                    rd = ''.join(str(v) for v in row)
+                    md5.update(rd.encode('utf-8'))
+                    print(rowdata + ";" +str(md5.hexdigest()))
         if self.opt['unallocated']:
             if self.opt['verbose'] == True:
                 print(str(page["pageNr"]) + ";U;'';" + "'" + page["unallocated"] + "'")
@@ -1005,7 +1009,10 @@ class SQLiteDBParser:
                             except:
                                 rowdata += "'" + str(cell) + "'"
                             i+=1
-                        print(rowdata)
+                        md5 = hashlib.md5()
+                        rd = ''.join(str(v) for v in row)
+                        md5.update(rd.encode('utf-8'))
+                        print(rowdata + ";" +str(md5.hexdigest()))
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[leafpage]) == True:
                     rownum = 0
 
@@ -1037,8 +1044,10 @@ class SQLiteDBParser:
                                 except:
                                     rowdata += "'" + str(cell) + "'"
                                 i+=1
-                            print(rowdata)
-
+                            md5 = hashlib.md5()
+                            rd = ''.join(str(v) for v in row)
+                            md5.update(rd.encode('utf-8'))
+                            print(rowdata + ";" +str(md5.hexdigest()))
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[leafpage]) == True:
                     if self.opt['verbose'] == True:
                         print(str(leafpage) + ";U;'';" + "'" + self.dbPages[leafpage]["unallocated"] + "'")
@@ -1072,7 +1081,10 @@ class SQLiteDBParser:
                             except:
                                 rowdata += "'" + str(cell) + "'"
                             i+=1
-                        print(rowdata)
+                        md5 = hashlib.md5()
+                        rd = ''.join(str(v) for v in row)
+                        md5.update(rd.encode('utf-8'))
+                        print(rowdata + ";" +str(md5.hexdigest()))
 
                 if self.opt['freespace'] and self.hasFreespace(self.dbPages[deletedpage]) == True:
 
@@ -1106,9 +1118,10 @@ class SQLiteDBParser:
                                 except:
                                     rowdata += "'" + str(cell) + "'"
                                 i+=1
-                            print(rowdata)
-
-
+                            md5 = hashlib.md5()
+                            rd = ''.join(str(v) for v in row)
+                            md5.update(rd.encode('utf-8'))
+                            print(rowdata + ";" +str(md5.hexdigest()))
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[deletedpage]) == True:
                     if self.opt['verbose'] == True:
                         print(str(deletedpage) + ";DU;'';" + "'" + self.dbPages[deletedpage]["unallocated"] + "'")
