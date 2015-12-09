@@ -796,7 +796,7 @@ class SQLiteDBParser:
                 else:
                     phlen = 8
 
-                print("Page header\tOffset: %4s\tLen: %4s" %(str(phOffset), str(phlen)))
+                print("Page header\tOffset: %8s (%s)\tLen: %4s" %(str(self.dbPages[page]['pageOffset']),str(phOffset), str(phlen)))
 
                 print("\t{0:25s} {1:>5s}".format("Flag:", str(self.dbPages[page]["pageHeader"]["pageByte"])))
                 print("\t{0:25s} {1:>5s}".format("First free block:", str(self.dbPages[page]["pageHeader"]["fbOffset"])))
@@ -810,36 +810,37 @@ class SQLiteDBParser:
                 print("\t{0:25s} {1:>5s}".format("Right most pointer:", str(rmp)))
 
 
-                print("\n\t{0:23s} {1:>5s}".format("Cell pointer array:", "")) #str(self.dbPages[page]["pageHeader"]["cellQty"])))
+                if self.dbPages[page]["pageHeader"]["cellQty"] > 0 and self.dbPages[page]['pageType'] != "Overflow Page":
+                    print("\n\t{0:23s} {1:>5s}".format("Cell pointer array:", "")) #str(self.dbPages[page]["pageHeader"]["cellQty"])))
 
-                for cp in range(0,(self.dbPages[page]["pageHeader"]["cellQty"]*2),2):
-                    start = cp
-                    end = cp + 2
-                    cellp = unpack('>H', self.dbPages[page]["cellPointer"][start:end])[0]
-                    cellstart = self.dbPages[page]['pageOffset'] + cellp
-                    print("\t\t{0:25s} {1:>5s}".format("Cell pointer:", str(cellp)))
+                    for cp in range(0,(self.dbPages[page]["pageHeader"]["cellQty"]*2),2):
+                        start = cp
+                        end = cp + 2
+                        cellp = unpack('>H', self.dbPages[page]["cellPointer"][start:end])[0]
+                        cellstart = self.dbPages[page]['pageOffset'] + cellp
+                        print("\t\t{0:23s} {1:>5s}".format("Cell pointer:", str(cellp)))
 
-                    if (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
-                        cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(self.data, cellstart, freespace=False)
-                        print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
-                        print("\t\t\t{0:15s} {1:>5s}".format("Row ID:", str(recordnum)))
-                        print("\t\t\tPayload")
-                        print("\t\t\t\t{0:22s} {1:>5s}".format("Payload header len:", str(payloadheaderlen)))
-                        print("\t\t\t\t{0:22s} {1:>5s}".format("Data offset:", str(dataoffset)))
-                        print("\t\t\t\t{0:22s} {1:>5s}".format("Overflow page offset:", str(overflowpageoffset)))
-                        print("\t\t\t\t{0:22s} {1:>5s}".format("Overflow page num:", str(overflowpagenum)))
-                    elif (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE):
-                        cellheader,payloadheaderlen,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(self.data, self.dbPages[page]['pageOffset'])
-                        print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
-                        print("\t\t\tPayload")
-                        print("\t\t\t\t{0:20s} {1:>5s}".format("Payload header len:", str(payloadheaderlen)))
-                        print("\t\t\t\t{0:20s} {1:>5s}".format("Data offset:", str(dataoffset)))
-                        print("\t\t\t\t{0:20s} {1:>5s}".format("Overflow page offset:", str(overflowpageoffset)))
-                        print("\t\t\t\t{0:20s} {1:>5s}".format("Overflow page num:", str(overflowpagenum)))
-                    elif (self.dbPages[page]["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE):
-                        cellheader, dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(self.data,cellstart)
-                        print("\t\t\t{0:15s} {1:>5s}".format("Left child:", str(pagechildnum)))
-                        print("\t\t\t{0:15s} {1:>5s}".format("Row ID:", str(recordnum)))
+                        if (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_TABLE_BTREE_PAGE):
+                            cellheader, payloadheaderlen, dataoffset, payloadlen, recordnum, payloadsizeincell, overflowpageoffset,overflowpagenum = self._parseLeafTableCellHeader(self.data, cellstart, freespace=False)
+                            print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
+                            print("\t\t\t{0:15s} {1:>5s}".format("Row ID:", str(recordnum)))
+                            print("\t\t\tPayload")
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Payload header len:", str(payloadheaderlen)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Data offset:", str(dataoffset)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Overflow page offset:", str(overflowpageoffset)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Overflow page num:", str(overflowpagenum)))
+                        elif (self.dbPages[page]["pageHeader"]["pageByte"] == LEAF_INDEX_BTREE_PAGE):
+                            cellheader,payloadheaderlen,dataoffset,payloadlen,overflowpageoffset,overflowpagenum = self._parseLeafIndexCellHeader(self.data, self.dbPages[page]['pageOffset'])
+                            print("\t\t\t{0:15s} {1:>5s}".format("Payload length:", str(payloadlen)))
+                            print("\t\t\tPayload")
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Payload header len:", str(payloadheaderlen)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Data offset:", str(dataoffset)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Overflow page offset:", str(overflowpageoffset)))
+                            print("\t\t\t\t{0:22s} {1:>8s}".format("Overflow page num:", str(overflowpagenum)))
+                        elif (self.dbPages[page]["pageHeader"]["pageByte"] == INTERIOR_TABLE_BTREE_PAGE):
+                            cellheader, dataoffset, pagechildnum, recordnum = self._parseInteriorTableCellHeader(self.data,cellstart)
+                            print("\t\t\t{0:15s} {1:>8s}".format("Left child:", str(pagechildnum)))
+                            print("\t\t\t{0:15s} {1:>8s}".format("Row ID:", str(recordnum)))
 
 
 
@@ -1537,7 +1538,7 @@ class SQLiteDBParser:
         if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
             overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
         else:
-            overflowpagenum = None
+            overflowpagenum = 0
 
         # Payload Fields
         while offset < (payloadheaderlenofs):
@@ -1618,7 +1619,7 @@ class SQLiteDBParser:
         if (payloadlen > (self.dbHeaderDict["pageSize"] - self.dbHeaderDict["unused_reserved_space"] - 35)):
             overflowpagenum = unpack(">I",data[overflowpageoffset:overflowpageoffset+4])[0]
         else:
-            overflowpagenum = None
+            overflowpagenum = 0
 
         # Payload Fields
         while offset < (payloadheaderlenofs):
