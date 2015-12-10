@@ -921,6 +921,7 @@ class SQLiteDBParser:
             for row in page["celldata"]:
                 rownum += 1
                 rowdata = str(page["pageNr"]) + ";C"
+                md5 = ''
                 i=0
                 for cell in row:
                     fname = ''
@@ -1045,7 +1046,7 @@ class SQLiteDBParser:
                                     rowdata += "'" + str(cell) + "'"
                                 i+=1
                             md5 = hashlib.md5()
-                            rd = ''.join(str(v) for v in row)
+                            rd = ''.join(str(v) for v in element)
                             md5.update(rd.encode('utf-8'))
                             print(rowdata + ";" +str(md5.hexdigest()))
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[leafpage]) == True:
@@ -1119,7 +1120,7 @@ class SQLiteDBParser:
                                     rowdata += "'" + str(cell) + "'"
                                 i+=1
                             md5 = hashlib.md5()
-                            rd = ''.join(str(v) for v in row)
+                            rd = ''.join(str(v) for v in element)
                             md5.update(rd.encode('utf-8'))
                             print(rowdata + ";" +str(md5.hexdigest()))
                 if self.opt['unallocated'] and self.hasUnallocated(self.dbPages[deletedpage]) == True:
